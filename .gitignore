@@ -1,0 +1,18 @@
+# Credenciales
+.env
+broker/config/passwd
+
+# Datos persistentes
+broker/data/
+broker/log/
+database/pgdata/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Certificados y claves privadas
+*.key
+*.pem

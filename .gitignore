@@ -16,3 +16,4 @@ venv/
 # Certificados y claves privadas
 *.key
 *.pem
+secrets/

@@ -1,0 +1,6 @@
+#Crea la API Rest
+Flask>=3.0,<4  
+# Permite que el backend se conecte y suscriba a MQQT
+paho-mqtt>=2.0,<3
+# Permite que Phython se conecte con PostgreSQL
+psycopg2-binary>=2.9,<3

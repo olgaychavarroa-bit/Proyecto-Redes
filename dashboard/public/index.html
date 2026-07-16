@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Monitoreo Ambiental Hospitalario</title>
+
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <header class="header">
+        <div>
+            <p class="eyebrow">Plataforma IoT hospitalaria</p>
+            <h1>Monitoreo ambiental</h1>
+            <p class="subtitle">
+                Temperatura, humedad y concentración de CO₂
+            </p>
+        </div>
+
+        <button id="refresh-button" type="button">
+            Actualizar
+        </button>
+    </header>
+
+    <main class="container">
+        <section class="summary">
+            <article class="summary-card">
+                <span>Áreas supervisadas</span>
+                <strong id="area-count">3</strong>
+            </article>
+
+            <article class="summary-card">
+                <span>Áreas con datos</span>
+                <strong id="areas-with-data">0</strong>
+            </article>
+
+            <article class="summary-card">
+                <span>Áreas en alerta</span>
+                <strong id="alert-count">0</strong>
+            </article>
+
+            <article class="summary-card">
+                <span>Última consulta</span>
+                <strong id="last-update">Sin actualizar</strong>
+            </article>
+        </section>
+
+        <section
+            id="connection-message"
+            class="message"
+            aria-live="polite"
+        >
+            Consultando información del backend...
+        </section>
+
+        <section>
+            <div class="section-heading">
+                <div>
+                    <p class="eyebrow">Estado actual</p>
+                    <h2>Áreas hospitalarias</h2>
+                </div>
+            </div>
+
+            <div id="area-cards" class="area-grid"></div>
+        </section>
+
+        <section class="table-section">
+            <div class="section-heading">
+                <div>
+                    <p class="eyebrow">Resumen</p>
+                    <h2>Últimas mediciones</h2>
+                </div>
+            </div>
+
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Área</th>
+                            <th>Dispositivo</th>
+                            <th>Temperatura</th>
+                            <th>Humedad</th>
+                            <th>CO₂</th>
+                            <th>Estado</th>
+                            <th>Fecha</th>
+                        </tr>
+                    </thead>
+
+                    <tbody id="telemetry-table"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="notice">
+            <strong>Nota:</strong>
+            los colores utilizan límites de demostración configurados
+            para este prototipo académico. No corresponden a criterios
+            clínicos oficiales.
+        </section>
+    </main>
+
+    <footer>
+        Sistema IoT para monitoreo ambiental hospitalario
+    </footer>
+
+    <script src="app.js"></script>
+</body>
+</html>

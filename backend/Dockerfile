@@ -13,8 +13,7 @@ COPY requirements.txt .
 
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY src/app.py .
-COPY src/wait_for.py .
+COPY src/ .
 
 EXPOSE 5000
 

@@ -287,6 +287,51 @@ def pending_manual_requests():
         connection.close()
 
 
+@key_rotation_bp.get(
+    "/api/v1/internal/key-rotation/device-status"
+)
+@rotator_token_required
+def internal_device_statuses():
+    """
+    Entrega al rotador el estado actual
+    de los dispositivos.
+    """
+
+    connection = db()
+
+    try:
+        with connection.cursor(
+            cursor_factory=RealDictCursor
+        ) as cursor:
+            cursor.execute(
+                """
+                SELECT
+                    device_id,
+                    status
+                FROM devices
+                ORDER BY device_id
+                """
+            )
+
+            devices = [
+                {
+                    "device_id":
+                        row["device_id"],
+                    "status":
+                        row["status"],
+                }
+                for row in cursor.fetchall()
+            ]
+
+        return jsonify(
+            count=len(devices),
+            devices=devices,
+        )
+
+    finally:
+        connection.close()
+
+
 @key_rotation_bp.post(
     "/api/v1/internal/key-rotation/activate"
 )

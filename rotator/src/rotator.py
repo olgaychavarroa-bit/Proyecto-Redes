@@ -475,6 +475,209 @@ def sync_broker_password(
     return True
 
 
+BROKER_PLACEHOLDER_USER = (
+    "__credencial_interna_deshabilitada__"
+)
+
+
+def broker_usernames(path):
+    usernames = set()
+
+    for line in path.read_text(
+        encoding="utf-8"
+    ).splitlines():
+        if ":" not in line:
+            continue
+
+        username = line.split(
+            ":",
+            1,
+        )[0].strip()
+
+        if username:
+            usernames.add(username)
+
+    return usernames
+
+
+def run_mosquitto_passwd(arguments):
+    completed = subprocess.run(
+        [
+            "mosquitto_passwd",
+            *arguments,
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        timeout=20,
+        check=False,
+    )
+
+    if completed.returncode != 0:
+        message = (
+            completed.stderr.strip()
+            or completed.stdout.strip()
+            or "mosquitto_passwd falló"
+        )
+
+        raise RuntimeError(message)
+
+
+def remove_broker_user(device_id):
+    username = BROKER_AUTH_MAP.get(
+        device_id
+    )
+
+    if not username:
+        return False
+
+    if BROKER_AUTH_PATH is None:
+        raise RuntimeError(
+            "BROKER_AUTH_FILE no está configurado"
+        )
+
+    if not BROKER_AUTH_PATH.exists():
+        raise RuntimeError(
+            "No existe el archivo MQTT: "
+            f"{BROKER_AUTH_PATH}"
+        )
+
+    current_users = broker_usernames(
+        BROKER_AUTH_PATH
+    )
+
+    if username not in current_users:
+        return False
+
+    temporary = BROKER_AUTH_PATH.with_name(
+        BROKER_AUTH_PATH.name
+        + f".revoke.{os.getpid()}"
+    )
+
+    shutil.copy2(
+        BROKER_AUTH_PATH,
+        temporary,
+    )
+
+    try:
+        run_mosquitto_passwd(
+            [
+                "-D",
+                str(temporary),
+                username,
+            ]
+        )
+
+        remaining_users = broker_usernames(
+            temporary
+        )
+
+        # Evita un password_file completamente vacío.
+        if not remaining_users:
+            run_mosquitto_passwd(
+                [
+                    "-b",
+                    "-c",
+                    str(temporary),
+                    BROKER_PLACEHOLDER_USER,
+                    secrets.token_urlsafe(48),
+                ]
+            )
+
+        os.chmod(
+            temporary,
+            0o644,
+        )
+
+        os.replace(
+            temporary,
+            BROKER_AUTH_PATH,
+        )
+
+    finally:
+        if temporary.exists():
+            temporary.unlink()
+
+    print(
+        "[broker revocado] "
+        f"device={device_id} | "
+        f"usuario={username}",
+        flush=True,
+    )
+
+    return True
+
+
+def invalidate_revoked_key(device_id):
+    path = active_key_path(
+        device_id
+    )
+
+    current_value = ""
+
+    if path.exists():
+        current_value = path.read_text(
+            encoding="utf-8"
+        ).strip()
+
+    # Evita cambiar el archivo repetidamente.
+    if current_value.startswith(
+        "revoked_"
+    ):
+        return False
+
+    revoked_value = (
+        "revoked_"
+        + secrets.token_urlsafe(32)
+    )
+
+    write_private_file(
+        path,
+        revoked_value,
+    )
+
+    print(
+        "[clave local invalidada] "
+        f"device={device_id}",
+        flush=True,
+    )
+
+    return True
+
+
+def sync_revoked_devices():
+    result = request_json(
+        "/api/v1/internal/"
+        "key-rotation/device-status"
+    )
+
+    for device in result.get(
+        "devices",
+        [],
+    ):
+        device_id = device.get(
+            "device_id"
+        )
+
+        status = device.get(
+            "status"
+        )
+
+        if device_id not in BROKER_AUTH_MAP:
+            continue
+
+        if status != "revoked":
+            continue
+
+        remove_broker_user(
+            device_id
+        )
+
+        invalidate_revoked_key(
+            device_id
+        )
+
+
 def finalize_key_file(device_id):
     pending = pending_key_path(
         device_id
@@ -851,6 +1054,8 @@ def main():
 
     recover_pending_files()
 
+    sync_revoked_devices()
+
     if args.force_device:
         if (
             args.force_device
@@ -878,6 +1083,16 @@ def main():
     last_due_check = 0.0
 
     while not stop_requested:
+        try:
+            sync_revoked_devices()
+
+        except Exception as error:
+            print(
+                "[error sincronizando estados] "
+                f"{error}",
+                flush=True,
+            )
+
         try:
             run_manual_requests()
 

@@ -9,10 +9,25 @@ services:
       MQTT_USERNAME: "iot_uci_01"
       MQTT_PASSWORD_FILE: "/run/secrets/simulator/api_key"
 
+  simulator-urgencias:
+    environment:
+      MQTT_PORT: "8884"
+      MQTT_USERNAME: "iot_urgencias_01"
+      MQTT_PASSWORD_FILE: "/run/secrets/simulator/api_key"
+
+  simulator-laboratorio:
+    environment:
+      MQTT_PORT: "8884"
+      MQTT_USERNAME: "iot_laboratorio_01"
+      MQTT_PASSWORD_FILE: "/run/secrets/simulator/api_key"
+
   key-rotator:
     environment:
       BROKER_AUTH_FILE: "/broker-config/passwd-api-key-piloto"
-      BROKER_AUTH_DEVICE_MAP: "iot_uci_01=iot_uci_01"
+      BROKER_AUTH_DEVICE_MAP: >-
+        iot_uci_01=iot_uci_01,
+        iot_urgencias_01=iot_urgencias_01,
+        iot_laboratorio_01=iot_laboratorio_01
     volumes:
       - ./broker/config:/broker-config
 

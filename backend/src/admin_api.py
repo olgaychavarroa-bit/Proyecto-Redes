@@ -3,9 +3,9 @@ import os
 import re
 import secrets
 from datetime import datetime
-from functools import wraps
 
 import psycopg2
+from admin_auth import jwt_required
 from flask import Blueprint, g, jsonify, request
 from psycopg2.extras import Json, RealDictCursor
 
@@ -78,9 +78,10 @@ def write_audit(
         or request.remote_addr
     )
 
-    actor = os.getenv(
-        "ADMIN_ACTOR",
-        "bootstrap-admin",
+    actor = (
+        g.admin_user["username"]
+        if getattr(g, "admin_user", None)
+        else "unknown-admin"
     )
 
     with conn.cursor() as cursor:
@@ -114,50 +115,6 @@ def write_audit(
                 ip_address,
             ),
         )
-
-
-def admin_required(view):
-    @wraps(view)
-    def protected(*args, **kwargs):
-        expected = os.getenv(
-            "ADMIN_API_TOKEN",
-            "",
-        )
-
-        scheme, _, received = request.headers.get(
-            "Authorization",
-            "",
-        ).partition(" ")
-
-        if len(expected) < 32:
-            return jsonify(
-                error=(
-                    "ADMIN_API_TOKEN no está "
-                    "configurado correctamente"
-                )
-            ), 500
-
-        valid = (
-            scheme.lower() == "bearer"
-            and secrets.compare_digest(
-                received,
-                expected,
-            )
-        )
-
-        if not valid:
-            return jsonify(
-                error="Token administrativo inválido"
-            ), 401
-
-        g.admin_actor = os.getenv(
-            "ADMIN_ACTOR",
-            "bootstrap-admin",
-        )
-
-        return view(*args, **kwargs)
-
-    return protected
 
 
 @admin_bp.before_app_request
@@ -220,7 +177,7 @@ def public_devices():
 # ============================================================
 
 @admin_bp.get("/devices")
-@admin_required
+@jwt_required(roles={"admin", "viewer"})
 def admin_devices():
     conn = db()
 
@@ -251,7 +208,7 @@ def admin_devices():
 # ============================================================
 
 @admin_bp.get("/audit")
-@admin_required
+@jwt_required(roles={"admin", "viewer"})
 def admin_audit():
     try:
         limit = int(
@@ -307,7 +264,7 @@ def admin_audit():
 @admin_bp.patch(
     "/devices/<device_id>/revoke"
 )
-@admin_required
+@jwt_required(roles={"admin"})
 def revoke_device(device_id):
     conn = db()
 
@@ -525,7 +482,7 @@ def create_credential(
 @admin_bp.patch(
     "/devices/<device_id>/activate"
 )
-@admin_required
+@jwt_required(roles={"admin"})
 def activate_device(device_id):
     conn = db()
 
@@ -596,7 +553,7 @@ def activate_device(device_id):
 @admin_bp.post(
     "/devices/<device_id>/rotate"
 )
-@admin_required
+@jwt_required(roles={"admin"})
 def rotate_device(device_id):
     conn = db()
 

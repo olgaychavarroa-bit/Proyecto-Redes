@@ -10,6 +10,7 @@ import paho.mqtt.client as mqtt
 import psycopg2
 from flask import Flask, jsonify, request
 from admin_api import admin_bp, public_bp
+from admin_auth import auth_bp
 from psycopg2.extras import RealDictCursor
 
 
@@ -36,6 +37,7 @@ VALID_AREAS = {"uci", "urgencias", "laboratorio"}
 app = Flask(__name__)
 app.register_blueprint(public_bp)
 app.register_blueprint(admin_bp)
+app.register_blueprint(auth_bp)
 mqtt_client: mqtt.Client | None = None
 
 

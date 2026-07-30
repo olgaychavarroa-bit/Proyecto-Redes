@@ -985,3 +985,136 @@ footer {
 .area-alert-detail li + li {
     margin-top: 3px;
 }
+
+
+/* ============================================================
+   MANTENIMIENTO DE TELEMETRÍA
+============================================================ */
+
+.telemetry-maintenance-section {
+    margin: 28px 0;
+    padding: 22px;
+    border: 1px solid #dfe6ee;
+    border-radius: 16px;
+    background: white;
+}
+
+.telemetry-maintenance-grid {
+    display: grid;
+    grid-template-columns:
+        repeat(4, minmax(0, 1fr));
+    gap: 14px;
+    margin: 20px 0;
+}
+
+.maintenance-date {
+    font-size: 0.82rem !important;
+}
+
+.retention-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 20px;
+    border: 1px solid #b7dfc8;
+    border-radius: 10px;
+    padding: 12px 14px;
+    color: #14532d;
+    background: #ecfdf3;
+}
+
+.manual-cleanup-panel {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 24px;
+    border-top: 1px solid #edf0f4;
+    padding-top: 20px;
+}
+
+.manual-cleanup-panel h3 {
+    margin: 0 0 6px;
+}
+
+.manual-cleanup-panel p {
+    margin: 0;
+    color: #667085;
+}
+
+.manual-cleanup-controls {
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+}
+
+.manual-cleanup-controls label {
+    font-weight: 700;
+}
+
+.manual-cleanup-controls select {
+    border: 1px solid #cfd8e3;
+    border-radius: 8px;
+    padding: 10px 12px;
+    background: white;
+}
+
+.telemetry-danger-zone {
+    margin-top: 24px;
+    border: 2px solid #dc3545;
+    border-radius: 12px;
+    padding: 18px;
+    color: #861313;
+    background: #fff5f5;
+}
+
+.telemetry-danger-zone h3 {
+    margin: 4px 0 7px;
+}
+
+.telemetry-danger-zone label {
+    display: block;
+    margin: 16px 0 7px;
+    font-weight: 700;
+}
+
+.telemetry-danger-zone input {
+    width: 100%;
+    margin-bottom: 12px;
+    border: 1px solid #dc3545;
+    border-radius: 8px;
+    padding: 10px 12px;
+    background: white;
+}
+
+.telemetry-danger-zone button {
+    color: white;
+    background: #b42318;
+}
+
+.telemetry-danger-zone button:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+}
+
+@media (max-width: 900px) {
+    .telemetry-maintenance-grid {
+        grid-template-columns:
+            repeat(2, minmax(0, 1fr));
+    }
+
+    .manual-cleanup-panel {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .manual-cleanup-controls {
+        align-items: stretch;
+        flex-direction: column;
+    }
+}
+
+@media (max-width: 520px) {
+    .telemetry-maintenance-grid {
+        grid-template-columns: 1fr;
+    }
+}

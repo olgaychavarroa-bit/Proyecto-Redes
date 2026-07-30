@@ -512,6 +512,193 @@
                     Sesión administrativa iniciada.
                 </div>
 
+
+                <!-- MANTENIMIENTO DE TELEMETRÍA -->
+
+                <section
+                    id="telemetry-maintenance-section"
+                    class="telemetry-maintenance-section"
+                >
+                    <div class="section-heading">
+                        <div>
+                            <p class="eyebrow">
+                                Base de datos
+                            </p>
+
+                            <h2>
+                                Mantenimiento de telemetría
+                            </h2>
+
+                            <p class="view-description">
+                                Control de almacenamiento,
+                                retención y eliminación de
+                                mediciones ambientales.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="telemetry-maintenance-grid">
+                        <article class="summary-card">
+                            <span>Registros totales</span>
+
+                            <strong
+                                id="telemetry-total-rows"
+                            >
+                                0
+                            </strong>
+                        </article>
+
+                        <article class="summary-card">
+                            <span>
+                                Registros con más de 30 días
+                            </span>
+
+                            <strong
+                                id="telemetry-expired-rows"
+                            >
+                                0
+                            </strong>
+                        </article>
+
+                        <article class="summary-card">
+                            <span>Medición más antigua</span>
+
+                            <strong
+                                id="telemetry-oldest-date"
+                                class="maintenance-date"
+                            >
+                                —
+                            </strong>
+                        </article>
+
+                        <article class="summary-card">
+                            <span>Tamaño de la tabla</span>
+
+                            <strong
+                                id="telemetry-table-size"
+                            >
+                                0 B
+                            </strong>
+                        </article>
+                    </div>
+
+                    <div class="retention-status">
+                        <strong>
+                            Retención automática
+                        </strong>
+
+                        <span
+                            id="telemetry-retention-status"
+                        >
+                            Consultando configuración...
+                        </span>
+                    </div>
+
+                    <div class="manual-cleanup-panel">
+                        <div>
+                            <h3>
+                                Eliminar telemetría antigua
+                            </h3>
+
+                            <p>
+                                Conserva únicamente las
+                                mediciones incluidas en el
+                                periodo seleccionado.
+                            </p>
+                        </div>
+
+                        <div class="manual-cleanup-controls">
+                            <label
+                                for="telemetry-retention-days"
+                            >
+                                Conservar
+                            </label>
+
+                            <select
+                                id="telemetry-retention-days"
+                            >
+                                <option value="7">
+                                    Últimos 7 días
+                                </option>
+
+                                <option
+                                    value="30"
+                                    selected
+                                >
+                                    Últimos 30 días
+                                </option>
+
+                                <option value="90">
+                                    Últimos 90 días
+                                </option>
+
+                                <option value="365">
+                                    Último año
+                                </option>
+                            </select>
+
+                            <button
+                                id="cleanup-telemetry-button"
+                                type="button"
+                            >
+                                Eliminar registros antiguos
+                            </button>
+                        </div>
+                    </div>
+
+                    <div
+                        id="telemetry-maintenance-message"
+                        class="message"
+                        aria-live="polite"
+                        hidden
+                    ></div>
+
+                    <div class="telemetry-danger-zone">
+                        <div>
+                            <p class="eyebrow">
+                                Zona de peligro
+                            </p>
+
+                            <h3>
+                                Vaciar toda la telemetría
+                            </h3>
+
+                            <p>
+                                Esta operación elimina todas
+                                las mediciones, pero conserva
+                                dispositivos, credenciales,
+                                administradores y auditoría.
+                            </p>
+                        </div>
+
+                        <label
+                            for="purge-telemetry-confirmation"
+                        >
+                            Escriba
+                            <code>
+                                ELIMINAR TELEMETRIA
+                            </code>
+                            para habilitar el botón
+                        </label>
+
+                        <input
+                            id="purge-telemetry-confirmation"
+                            type="text"
+                            autocomplete="off"
+                            placeholder="ELIMINAR TELEMETRIA"
+                        >
+
+                        <button
+                            id="purge-telemetry-button"
+                            type="button"
+                            disabled
+                        >
+                            Vaciar toda la telemetría
+                        </button>
+                    </div>
+                </section>
+
+
                 <!-- API KEY MOSTRADA UNA SOLA VEZ -->
 
                 <section
@@ -652,7 +839,7 @@
     <script src="app.js?v=3"></script>
     <script src="charts.js?v=1"></script>
     <script src="devices.js?v=1"></script>
-    <script src="admin.js?v=1"></script>
+    <script src="admin.js?v=2"></script>
     <script src="alerts-es.js?v=1"></script>
 </body>
 </html>

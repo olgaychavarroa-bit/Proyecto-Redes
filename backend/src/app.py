@@ -12,6 +12,7 @@ import psycopg2
 from flask import Flask, jsonify, request
 from admin_api import admin_bp, public_bp
 from admin_auth import auth_bp
+from telemetry_admin import start_retention_worker, telemetry_admin_bp
 from psycopg2.extras import RealDictCursor
 
 
@@ -52,6 +53,7 @@ app = Flask(__name__)
 app.register_blueprint(public_bp)
 app.register_blueprint(admin_bp)
 app.register_blueprint(auth_bp)
+app.register_blueprint(telemetry_admin_bp)
 mqtt_client: mqtt.Client | None = None
 
 
@@ -692,6 +694,7 @@ def start_mqtt():
 
 if __name__ == "__main__":
     start_mqtt()
+    start_retention_worker()
 
     app.run(
         host="0.0.0.0",

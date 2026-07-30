@@ -13,6 +13,16 @@
     const AUDIT_ENDPOINT =
         "/api/v1/admin/audit?limit=20";
 
+
+    const TELEMETRY_MAINTENANCE_ENDPOINT =
+        "/api/v1/admin/telemetry/maintenance";
+
+    const TELEMETRY_CLEANUP_ENDPOINT =
+        "/api/v1/admin/telemetry/cleanup";
+
+    const TELEMETRY_PURGE_ENDPOINT =
+        "/api/v1/admin/telemetry/purge";
+
     let adminAccessToken = null;
     let adminUser = null;
     let adminExpiresAt = null;
@@ -99,6 +109,32 @@
     const hideApiKeyButton =
         document.getElementById(
             "hide-api-key-button"
+        );
+
+
+    const cleanupTelemetryButton =
+        document.getElementById(
+            "cleanup-telemetry-button"
+        );
+
+    const telemetryRetentionDays =
+        document.getElementById(
+            "telemetry-retention-days"
+        );
+
+    const telemetryMaintenanceMessage =
+        document.getElementById(
+            "telemetry-maintenance-message"
+        );
+
+    const purgeTelemetryConfirmation =
+        document.getElementById(
+            "purge-telemetry-confirmation"
+        );
+
+    const purgeTelemetryButton =
+        document.getElementById(
+            "purge-telemetry-button"
         );
 
 
@@ -672,6 +708,281 @@
     }
 
 
+
+    function formatStorageSize(bytes) {
+        const value = Number(bytes);
+
+        if (
+            !Number.isFinite(value)
+            || value <= 0
+        ) {
+            return "0 B";
+        }
+
+        const units = [
+            "B",
+            "KB",
+            "MB",
+            "GB"
+        ];
+
+        const index = Math.min(
+            Math.floor(
+                Math.log(value)
+                / Math.log(1024)
+            ),
+            units.length - 1
+        );
+
+        const converted = (
+            value
+            / Math.pow(1024, index)
+        );
+
+        return (
+            converted.toLocaleString(
+                "es-CO",
+                {
+                    maximumFractionDigits: 2
+                }
+            )
+            + " "
+            + units[index]
+        );
+    }
+
+
+    function showTelemetryMaintenanceMessage(
+        message,
+        type = ""
+    ) {
+        telemetryMaintenanceMessage.hidden =
+            false;
+
+        telemetryMaintenanceMessage.className =
+            type
+                ? `message ${type}`
+                : "message";
+
+        telemetryMaintenanceMessage.textContent =
+            message;
+    }
+
+
+    function updatePurgeButton() {
+        const isAdmin = (
+            adminUser?.role === "admin"
+        );
+
+        const confirmationMatches = (
+            purgeTelemetryConfirmation.value
+                .trim()
+            === "ELIMINAR TELEMETRIA"
+        );
+
+        purgeTelemetryButton.disabled = !(
+            isAdmin
+            && confirmationMatches
+        );
+    }
+
+
+    function renderTelemetryMaintenance(data) {
+        document.getElementById(
+            "telemetry-total-rows"
+        ).textContent =
+            Number(
+                data.total_rows ?? 0
+            ).toLocaleString("es-CO");
+
+        document.getElementById(
+            "telemetry-expired-rows"
+        ).textContent =
+            Number(
+                data.expired_rows ?? 0
+            ).toLocaleString("es-CO");
+
+        document.getElementById(
+            "telemetry-oldest-date"
+        ).textContent =
+            formatAdminDate(
+                data.oldest_received_at
+            );
+
+        document.getElementById(
+            "telemetry-table-size"
+        ).textContent =
+            formatStorageSize(
+                data.table_size_bytes
+            );
+
+        const retention =
+            data.retention ?? {};
+
+        document.getElementById(
+            "telemetry-retention-status"
+        ).textContent =
+            retention.enabled
+                ? (
+                    "Activa: conserva los "
+                    + `${retention.days} días `
+                    + "más recientes y se "
+                    + "revisa automáticamente."
+                )
+                : "Desactivada";
+
+        const isAdmin = (
+            adminUser?.role === "admin"
+        );
+
+        cleanupTelemetryButton.disabled =
+            !isAdmin;
+
+        purgeTelemetryConfirmation.disabled =
+            !isAdmin;
+
+        updatePurgeButton();
+    }
+
+
+    async function cleanupOldTelemetry() {
+        const retentionDays = Number(
+            telemetryRetentionDays.value
+        );
+
+        const confirmed = window.confirm(
+            "Se eliminarán las mediciones "
+            + `con más de ${retentionDays} días. `
+            + "Los dispositivos, credenciales "
+            + "y administradores se conservarán."
+        );
+
+        if (!confirmed) {
+            return;
+        }
+
+        cleanupTelemetryButton.disabled = true;
+
+        showTelemetryMaintenanceMessage(
+            "Ejecutando limpieza de telemetría..."
+        );
+
+        try {
+            const result =
+                await protectedRequest(
+                    TELEMETRY_CLEANUP_ENDPOINT,
+                    {
+                        method: "POST",
+
+                        headers: {
+                            "Content-Type":
+                                "application/json"
+                        },
+
+                        body: JSON.stringify({
+                            retention_days:
+                                retentionDays
+                        })
+                    }
+                );
+
+            await loadAdminPanel(true);
+
+            showTelemetryMaintenanceMessage(
+                "Limpieza completada. "
+                + "Registros eliminados: "
+                + `${result.deleted_rows}.`,
+                "success"
+            );
+
+        } catch (error) {
+            showTelemetryMaintenanceMessage(
+                "La limpieza no pudo "
+                + "completarse: "
+                + error.message,
+                "error"
+            );
+
+        } finally {
+            cleanupTelemetryButton.disabled =
+                adminUser?.role !== "admin";
+        }
+    }
+
+
+    async function purgeAllTelemetry() {
+        const confirmation = (
+            purgeTelemetryConfirmation.value
+                .trim()
+        );
+
+        if (
+            confirmation
+            !== "ELIMINAR TELEMETRIA"
+        ) {
+            return;
+        }
+
+        const confirmed = window.confirm(
+            "Esta operación eliminará TODAS "
+            + "las mediciones de telemetría. "
+            + "Esta acción no se puede deshacer."
+        );
+
+        if (!confirmed) {
+            return;
+        }
+
+        purgeTelemetryButton.disabled = true;
+
+        showTelemetryMaintenanceMessage(
+            "Vaciando la tabla de telemetría..."
+        );
+
+        try {
+            const result =
+                await protectedRequest(
+                    TELEMETRY_PURGE_ENDPOINT,
+                    {
+                        method: "POST",
+
+                        headers: {
+                            "Content-Type":
+                                "application/json"
+                        },
+
+                        body: JSON.stringify({
+                            confirmation:
+                                "ELIMINAR TELEMETRIA"
+                        })
+                    }
+                );
+
+            purgeTelemetryConfirmation.value =
+                "";
+
+            await loadAdminPanel(true);
+
+            showTelemetryMaintenanceMessage(
+                "Telemetría eliminada. "
+                + "Registros borrados: "
+                + `${result.deleted_rows}.`,
+                "success"
+            );
+
+        } catch (error) {
+            showTelemetryMaintenanceMessage(
+                "No fue posible vaciar "
+                + "la telemetría: "
+                + error.message,
+                "error"
+            );
+        }
+
+        updatePurgeButton();
+    }
+
+
     async function loadAdminPanel(
         silent = false
     ) {
@@ -695,7 +1006,8 @@
             const [
                 profile,
                 devices,
-                audits
+                audits,
+                telemetryMaintenance
             ] = await Promise.all([
                 protectedRequest(
                     PROFILE_ENDPOINT
@@ -707,6 +1019,10 @@
 
                 protectedRequest(
                     AUDIT_ENDPOINT
+                ),
+
+                protectedRequest(
+                    TELEMETRY_MAINTENANCE_ENDPOINT
                 )
             ]);
 
@@ -721,6 +1037,9 @@
             renderAdminSummary(devices, audits);
             renderAdminDevices(devices);
             renderAudit(audits);
+            renderTelemetryMaintenance(
+                telemetryMaintenance
+            );
 
             if (!silent) {
                 showPanelMessage(
@@ -854,6 +1173,25 @@
             );
         }
     }
+
+
+
+    cleanupTelemetryButton.addEventListener(
+        "click",
+        cleanupOldTelemetry
+    );
+
+
+    purgeTelemetryConfirmation.addEventListener(
+        "input",
+        updatePurgeButton
+    );
+
+
+    purgeTelemetryButton.addEventListener(
+        "click",
+        purgeAllTelemetry
+    );
 
 
     loginForm.addEventListener(

@@ -29,6 +29,16 @@ ROTATOR_CHECK_INTERVAL = max(
     ),
 )
 
+ROTATOR_REQUEST_INTERVAL = max(
+    2,
+    int(
+        os.environ.get(
+            "ROTATOR_REQUEST_INTERVAL",
+            "5",
+        )
+    ),
+)
+
 ROTATOR_DEVICE_MAP = os.environ.get(
     "ROTATOR_DEVICE_MAP",
     (
@@ -48,7 +58,7 @@ KEY_ROOT = Path(
 stop_requested = False
 
 
-def parse_device_map() -> dict[str, str]:
+def parse_device_map():
     mapping = {}
 
     for item in ROTATOR_DEVICE_MAP.split(","):
@@ -77,7 +87,7 @@ def parse_device_map() -> dict[str, str]:
 DEVICE_MAP = parse_device_map()
 
 
-def read_token() -> str:
+def read_token():
     token = Path(
         ROTATOR_TOKEN_FILE
     ).read_text(
@@ -93,8 +103,8 @@ def read_token() -> str:
 
 
 def request_json(
-    path: str,
-    method: str = "GET",
+    path,
+    method="GET",
     payload=None,
 ):
     body = None
@@ -160,29 +170,19 @@ def request_json(
     )
 
 
-def active_key_path(
-    device_id: str,
-) -> Path:
-    area = DEVICE_MAP.get(
-        device_id
-    )
+def active_key_path(device_id):
+    area = DEVICE_MAP.get(device_id)
 
     if not area:
         raise RuntimeError(
-            "No existe un área configurada "
-            f"para {device_id}"
+            "No existe área configurada para "
+            f"{device_id}"
         )
 
-    return (
-        KEY_ROOT
-        / area
-        / "api_key"
-    )
+    return KEY_ROOT / area / "api_key"
 
 
-def pending_key_path(
-    device_id: str,
-) -> Path:
+def pending_key_path(device_id):
     return active_key_path(
         device_id
     ).with_name(
@@ -190,10 +190,15 @@ def pending_key_path(
     )
 
 
-def write_private_file(
-    path: Path,
-    value: str,
-):
+def pending_metadata_path(device_id):
+    return active_key_path(
+        device_id
+    ).with_name(
+        "api_key.pending.json"
+    )
+
+
+def write_private_file(path, value):
     path.parent.mkdir(
         parents=True,
         exist_ok=True,
@@ -218,9 +223,7 @@ def write_private_file(
     ) as file:
         file.write(value)
         file.flush()
-        os.fsync(
-            file.fileno()
-        )
+        os.fsync(file.fileno())
 
     os.chmod(
         temporary,
@@ -233,12 +236,41 @@ def write_private_file(
     )
 
 
+def write_pending_metadata(
+    device_id,
+    metadata,
+):
+    write_private_file(
+        pending_metadata_path(device_id),
+        json.dumps(
+            metadata,
+            separators=(",", ":"),
+        ),
+    )
+
+
 def prepare_pending_key(
-    device_id: str,
-) -> tuple[Path, str]:
+    device_id,
+    action,
+    request_id,
+    force,
+):
     pending = pending_key_path(
         device_id
     )
+
+    metadata_path = (
+        pending_metadata_path(
+            device_id
+        )
+    )
+
+    expected_metadata = {
+        "device_id": device_id,
+        "action": action,
+        "request_id": request_id,
+        "force": force,
+    }
 
     if pending.exists():
         key = pending.read_text(
@@ -247,11 +279,39 @@ def prepare_pending_key(
 
         if not key:
             raise RuntimeError(
-                f"Archivo pendiente vacío: "
-                f"{pending}"
+                f"Archivo pendiente vacío: {pending}"
             )
 
-        return pending, key
+        if metadata_path.exists():
+            stored_metadata = json.loads(
+                metadata_path.read_text(
+                    encoding="utf-8"
+                )
+            )
+
+            if (
+                stored_metadata.get("device_id")
+                != device_id
+            ):
+                raise RuntimeError(
+                    "Metadatos pendientes inválidos"
+                )
+
+            expected_metadata = (
+                stored_metadata
+            )
+
+        else:
+            write_pending_metadata(
+                device_id,
+                expected_metadata,
+            )
+
+        return (
+            pending,
+            key,
+            expected_metadata,
+        )
 
     key = secrets.token_urlsafe(32)
 
@@ -260,28 +320,21 @@ def prepare_pending_key(
         key,
     )
 
-    return pending, key
-
-
-def rotate_device(
-    device_id: str,
-    force: bool,
-):
-    pending, new_key = (
-        prepare_pending_key(
-            device_id
-        )
+    write_pending_metadata(
+        device_id,
+        expected_metadata,
     )
 
-    result = request_json(
-        "/api/v1/internal/"
-        "key-rotation/activate",
-        method="POST",
-        payload={
-            "device_id": device_id,
-            "api_key": new_key,
-            "force": force,
-        },
+    return (
+        pending,
+        key,
+        expected_metadata,
+    )
+
+
+def finalize_key_file(device_id):
+    pending = pending_key_path(
+        device_id
     )
 
     destination = active_key_path(
@@ -298,14 +351,124 @@ def rotate_device(
         0o600,
     )
 
-    print(
-        "[rotación completada] "
-        f"device={device_id} | "
-        f"versión="
-        f"{result.get('credential_version')} | "
-        f"idempotente="
-        f"{result.get('idempotent', False)}"
+    metadata = pending_metadata_path(
+        device_id
     )
+
+    if metadata.exists():
+        metadata.unlink()
+
+
+def report_request_error(
+    request_id,
+    error,
+):
+    if request_id is None:
+        return
+
+    try:
+        request_json(
+            "/api/v1/internal/key-rotation/"
+            f"requests/{request_id}/error",
+            method="POST",
+            payload={
+                "error": str(error),
+            },
+        )
+
+    except Exception as report_error:
+        print(
+            "[error al reportar solicitud] "
+            f"request={request_id} | "
+            f"{report_error}"
+        )
+
+
+def process_rotation(
+    device_id,
+    action="rotate",
+    request_id=None,
+    force=False,
+):
+    (
+        pending,
+        new_key,
+        metadata,
+    ) = prepare_pending_key(
+        device_id,
+        action,
+        request_id,
+        force,
+    )
+
+    actual_action = metadata.get(
+        "action",
+        action,
+    )
+
+    actual_request_id = metadata.get(
+        "request_id",
+        request_id,
+    )
+
+    actual_force = bool(
+        metadata.get(
+            "force",
+            force,
+        )
+    )
+
+    try:
+        result = request_json(
+            "/api/v1/internal/"
+            "key-rotation/activate",
+            method="POST",
+            payload={
+                "device_id": device_id,
+                "api_key": new_key,
+                "action": actual_action,
+                "request_id":
+                    actual_request_id,
+                "force": actual_force,
+            },
+        )
+
+        finalize_key_file(
+            device_id
+        )
+
+        if actual_request_id is not None:
+            request_json(
+                "/api/v1/internal/key-rotation/"
+                f"requests/"
+                f"{actual_request_id}/complete",
+                method="POST",
+                payload={
+                    "credential_version":
+                        result.get(
+                            "credential_version"
+                        ),
+                },
+            )
+
+        print(
+            "[rotación completada] "
+            f"device={device_id} | "
+            f"acción={actual_action} | "
+            f"solicitud={actual_request_id} | "
+            f"versión="
+            f"{result.get('credential_version')} | "
+            f"idempotente="
+            f"{result.get('idempotent', False)}"
+        )
+
+    except Exception as error:
+        report_request_error(
+            actual_request_id,
+            error,
+        )
+
+        raise
 
 
 def recover_pending_files():
@@ -317,15 +480,55 @@ def recover_pending_files():
         if not pending.exists():
             continue
 
+        metadata_path = (
+            pending_metadata_path(
+                device_id
+            )
+        )
+
+        metadata = {
+            "device_id": device_id,
+            "action": "rotate",
+            "request_id": None,
+            "force": True,
+        }
+
+        if metadata_path.exists():
+            try:
+                metadata = json.loads(
+                    metadata_path.read_text(
+                        encoding="utf-8"
+                    )
+                )
+
+            except Exception as error:
+                print(
+                    "[metadatos pendientes inválidos] "
+                    f"device={device_id} | "
+                    f"{error}"
+                )
+
         print(
-            "[recuperación] clave pendiente | "
+            "[recuperación de clave pendiente] "
             f"device={device_id}"
         )
 
         try:
-            rotate_device(
+            process_rotation(
                 device_id,
-                force=False,
+                action=metadata.get(
+                    "action",
+                    "rotate",
+                ),
+                request_id=metadata.get(
+                    "request_id"
+                ),
+                force=bool(
+                    metadata.get(
+                        "force",
+                        True,
+                    )
+                ),
             )
 
         except Exception as error:
@@ -336,9 +539,61 @@ def recover_pending_files():
             )
 
 
-def run_due_rotations():
-    recover_pending_files()
+def run_manual_requests():
+    result = request_json(
+        "/api/v1/internal/"
+        "key-rotation/requests"
+    )
 
+    requests_list = result.get(
+        "requests",
+        [],
+    )
+
+    for item in requests_list:
+        device_id = item.get(
+            "device_id"
+        )
+
+        request_id = item.get("id")
+        action = item.get("action")
+
+        if device_id not in DEVICE_MAP:
+            error = RuntimeError(
+                "Dispositivo no configurado "
+                f"en el rotador: {device_id}"
+            )
+
+            report_request_error(
+                request_id,
+                error,
+            )
+
+            print(
+                "[solicitud omitida] "
+                f"{error}"
+            )
+
+            continue
+
+        try:
+            process_rotation(
+                device_id,
+                action=action,
+                request_id=request_id,
+                force=False,
+            )
+
+        except Exception as error:
+            print(
+                "[error de solicitud manual] "
+                f"request={request_id} | "
+                f"device={device_id} | "
+                f"{error}"
+            )
+
+
+def run_due_rotations():
     result = request_json(
         "/api/v1/internal/"
         "key-rotation/due"
@@ -352,7 +607,7 @@ def run_due_rotations():
     if not devices:
         print(
             "[rotador] no hay rotaciones "
-            "pendientes"
+            "programadas pendientes"
         )
 
         return
@@ -371,30 +626,28 @@ def run_due_rotations():
             continue
 
         try:
-            rotate_device(
+            process_rotation(
                 device_id,
+                action="rotate",
+                request_id=None,
                 force=False,
             )
 
         except Exception as error:
             print(
-                "[error de rotación] "
+                "[error de rotación programada] "
                 f"device={device_id} | "
                 f"{error}"
             )
 
 
-def handle_signal(
-    signum,
-    frame,
-):
+def handle_signal(signum, frame):
     global stop_requested
 
     stop_requested = True
 
     print(
-        f"[rotador] señal {signum}; "
-        "cerrando"
+        f"[rotador] señal {signum}; cerrando"
     )
 
 
@@ -415,9 +668,11 @@ def main():
     print(
         "[rotador iniciado] "
         f"backend={BACKEND_URL} | "
-        f"intervalo="
-        f"{ROTATOR_CHECK_INTERVAL}s"
+        f"solicitudes={ROTATOR_REQUEST_INTERVAL}s | "
+        f"programadas={ROTATOR_CHECK_INTERVAL}s"
     )
+
+    recover_pending_files()
 
     if args.force_device:
         if (
@@ -425,12 +680,13 @@ def main():
             not in DEVICE_MAP
         ):
             raise RuntimeError(
-                "Dispositivo forzado "
-                "no configurado"
+                "Dispositivo forzado no configurado"
             )
 
-        rotate_device(
+        process_rotation(
             args.force_device,
+            action="rotate",
+            request_id=None,
             force=True,
         )
 
@@ -438,21 +694,41 @@ def main():
             return
 
     elif args.once:
+        run_manual_requests()
         run_due_rotations()
         return
 
+    last_due_check = 0.0
+
     while not stop_requested:
         try:
-            run_due_rotations()
+            run_manual_requests()
 
         except Exception as error:
             print(
-                "[error del rotador] "
+                "[error consultando solicitudes] "
                 f"{error}"
             )
 
+        current_time = time.monotonic()
+
+        if (
+            current_time - last_due_check
+            >= ROTATOR_CHECK_INTERVAL
+        ):
+            try:
+                run_due_rotations()
+
+            except Exception as error:
+                print(
+                    "[error del rotador programado] "
+                    f"{error}"
+                )
+
+            last_due_check = current_time
+
         for _ in range(
-            ROTATOR_CHECK_INTERVAL
+            ROTATOR_REQUEST_INTERVAL
         ):
             if stop_requested:
                 break

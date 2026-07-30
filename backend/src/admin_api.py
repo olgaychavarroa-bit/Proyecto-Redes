@@ -407,6 +407,90 @@ def create_credential(
     )
 
 
+
+def enqueue_key_rotation_request(
+    conn,
+    cursor,
+    device_id,
+    action,
+):
+    """
+    Registra una solicitud para que iot-key-rotator
+    genere, instale y guarde la nueva API Key.
+    """
+
+    cursor.execute(
+        """
+        SELECT
+            id,
+            action,
+            status,
+            requested_at
+        FROM api_key_rotation_requests
+        WHERE device_id = %s
+          AND status = 'pending'
+        ORDER BY id DESC
+        LIMIT 1
+        FOR UPDATE
+        """,
+        (device_id,),
+    )
+
+    existing = cursor.fetchone()
+
+    if existing:
+        return {
+            "request_id": existing["id"],
+            "created": False,
+            "existing_action": existing["action"],
+        }
+
+    cursor.execute(
+        """
+        INSERT INTO api_key_rotation_requests (
+            device_id,
+            action,
+            source,
+            status
+        )
+        VALUES (
+            %s,
+            %s,
+            'admin',
+            'pending'
+        )
+        RETURNING id
+        """,
+        (
+            device_id,
+            action,
+        ),
+    )
+
+    request_id = cursor.fetchone()["id"]
+
+    write_audit(
+        conn,
+        (
+            "device_activate_requested"
+            if action == "activate"
+            else "api_key_rotate_requested"
+        ),
+        device_id,
+        details={
+            "request_id": request_id,
+            "action": action,
+            "automatic_file_update": True,
+        },
+    )
+
+    return {
+        "request_id": request_id,
+        "created": True,
+        "existing_action": None,
+    }
+
+
 # ============================================================
 # REACTIVAR DISPOSITIVO
 # ============================================================
@@ -440,42 +524,46 @@ def activate_device(device_id):
 
                 if not device:
                     return jsonify(
-                        error=(
-                            "Dispositivo no encontrado"
-                        )
+                        error="Dispositivo no encontrado"
                     ), 404
 
                 if device["status"] == "active":
                     return jsonify(
                         error=(
-                            "El dispositivo ya está "
-                            "activo"
+                            "El dispositivo ya está activo"
                         )
                     ), 409
 
-                new_key, new_version = (
-                    create_credential(
+                request_result = (
+                    enqueue_key_rotation_request(
                         conn,
                         cursor,
-                        device,
                         device_id,
                         "activate",
                     )
                 )
 
         return jsonify(
-            device_id=device_id,
-            status="active",
-            credential_version=new_version,
-            api_key=new_key,
-            warning=(
-                "Guarde la nueva API Key. "
-                "Se muestra una sola vez."
+            message=(
+                "Reactivación solicitada. "
+                "El rotador generará la API Key "
+                "y actualizará automáticamente "
+                "el archivo privado del simulador."
             ),
-        )
+            request_id=request_result["request_id"],
+            device_id=device_id,
+            action=(
+                request_result["existing_action"]
+                if not request_result["created"]
+                else "activate"
+            ),
+            status="pending",
+            created=request_result["created"],
+        ), 202
 
     finally:
         conn.close()
+
 
 
 # ============================================================
@@ -511,40 +599,43 @@ def rotate_device(device_id):
 
                 if not device:
                     return jsonify(
-                        error=(
-                            "Dispositivo no encontrado"
-                        )
+                        error="Dispositivo no encontrado"
                     ), 404
 
                 if device["status"] != "active":
                     return jsonify(
                         error=(
-                            "El dispositivo debe estar "
-                            "activo para rotar su API Key"
+                            "El dispositivo debe estar activo "
+                            "para rotar su API Key"
                         )
                     ), 409
 
-                new_key, new_version = (
-                    create_credential(
+                request_result = (
+                    enqueue_key_rotation_request(
                         conn,
                         cursor,
-                        device,
                         device_id,
                         "rotate",
                     )
                 )
 
         return jsonify(
-            device_id=device_id,
-            status="active",
-            credential_version=new_version,
-            api_key=new_key,
-            warning=(
-                "Guarde la nueva API Key. "
-                "La clave anterior funcionará durante "
-                "el periodo de gracia configurado."
+            message=(
+                "Rotación solicitada. "
+                "La API Key será instalada y "
+                "guardada automáticamente en el "
+                "archivo privado del simulador."
             ),
-        )
+            request_id=request_result["request_id"],
+            device_id=device_id,
+            action=(
+                request_result["existing_action"]
+                if not request_result["created"]
+                else "rotate"
+            ),
+            status="pending",
+            created=request_result["created"],
+        ), 202
 
     finally:
         conn.close()

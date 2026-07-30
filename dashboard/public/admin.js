@@ -1111,12 +1111,16 @@
             activate:
                 `¿Confirmas la reactivación de `
                 + `${deviceId}? Se generará una `
-                + "API Key nueva.",
+                + "API Key nueva y el archivo del "
+                + "simulador se actualizará "
+                + "automáticamente.",
 
             rotate:
                 `¿Confirmas la rotación de la `
-                + `API Key de ${deviceId}? La `
-                + "clave anterior dejará de funcionar."
+                + `API Key de ${deviceId}? La nueva `
+                + "clave se guardará automáticamente "
+                + "y la anterior tendrá un periodo "
+                + "temporal de gracia."
         };
 
         if (

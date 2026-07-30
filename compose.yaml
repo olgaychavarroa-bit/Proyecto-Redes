@@ -222,6 +222,7 @@ services:
       BACKEND_URL: http://iot-backend:5000
       ROTATOR_TOKEN_FILE: /run/secrets/rotator/service_token
       ROTATOR_CHECK_INTERVAL: ${ROTATOR_CHECK_INTERVAL:-3600}
+      ROTATOR_REQUEST_INTERVAL: ${ROTATOR_REQUEST_INTERVAL:-5}
       ROTATOR_DEVICE_MAP: iot_uci_01=uci,iot_urgencias_01=urgencias,iot_laboratorio_01=laboratorio
       KEY_ROOT: /keys
     volumes:

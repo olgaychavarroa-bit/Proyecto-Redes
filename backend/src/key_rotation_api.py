@@ -56,22 +56,15 @@ def db():
 
 
 def read_service_token() -> str:
-    try:
-        token = Path(
-            ROTATOR_SERVICE_TOKEN_FILE
-        ).read_text(
-            encoding="utf-8"
-        ).strip()
-
-    except OSError as error:
-        raise RuntimeError(
-            "No se pudo leer el token "
-            f"del rotador: {error}"
-        ) from error
+    token = Path(
+        ROTATOR_SERVICE_TOKEN_FILE
+    ).read_text(
+        encoding="utf-8"
+    ).strip()
 
     if not token:
         raise RuntimeError(
-            "El token del rotador está vacío"
+            "El token interno del rotador está vacío"
         )
 
     return token
@@ -88,7 +81,7 @@ def rotator_token_required(function):
         try:
             expected = read_service_token()
 
-        except RuntimeError as error:
+        except Exception as error:
             return jsonify(
                 error=str(error)
             ), 503
@@ -145,9 +138,7 @@ def write_system_audit(
     )
 
 
-def expire_old_grace_credentials(
-    cursor,
-):
+def expire_old_grace_credentials(cursor):
     cursor.execute(
         """
         UPDATE device_credentials
@@ -189,14 +180,11 @@ def due_rotations():
                     FROM devices
                     WHERE status = 'active'
                       AND (
-                          next_key_rotation_at
-                              IS NULL
-                          OR next_key_rotation_at
-                              <= NOW()
+                          next_key_rotation_at IS NULL
+                          OR next_key_rotation_at <= NOW()
                       )
                     ORDER BY
-                        next_key_rotation_at
-                            NULLS FIRST,
+                        next_key_rotation_at NULLS FIRST,
                         device_id
                     """
                 )
@@ -231,8 +219,68 @@ def due_rotations():
                     )
 
         return jsonify(
-            devices=devices,
             count=len(devices),
+            devices=devices,
+        )
+
+    finally:
+        connection.close()
+
+
+@key_rotation_bp.get(
+    "/api/v1/internal/key-rotation/requests"
+)
+@rotator_token_required
+def pending_manual_requests():
+    connection = db()
+
+    try:
+        with connection.cursor(
+            cursor_factory=RealDictCursor
+        ) as cursor:
+            cursor.execute(
+                """
+                SELECT
+                    id,
+                    device_id,
+                    action,
+                    source,
+                    status,
+                    requested_at,
+                    attempts
+                FROM api_key_rotation_requests
+                WHERE status = 'pending'
+                ORDER BY requested_at, id
+                LIMIT 20
+                """
+            )
+
+            requests_list = []
+
+            for row in cursor.fetchall():
+                requests_list.append(
+                    {
+                        "id": row["id"],
+                        "device_id":
+                            row["device_id"],
+                        "action":
+                            row["action"],
+                        "source":
+                            row["source"],
+                        "status":
+                            row["status"],
+                        "attempts":
+                            row["attempts"],
+                        "requested_at":
+                            row[
+                                "requested_at"
+                            ].isoformat(),
+                    }
+                )
+
+        return jsonify(
+            count=len(requests_list),
+            requests=requests_list,
         )
 
     finally:
@@ -249,25 +297,30 @@ def activate_rotated_key():
     ) or {}
 
     device_id = str(
-        payload.get(
-            "device_id",
-            "",
-        )
+        payload.get("device_id", "")
     ).strip()
 
     new_api_key = str(
-        payload.get(
-            "api_key",
-            "",
-        )
+        payload.get("api_key", "")
     ).strip()
 
+    action = str(
+        payload.get("action", "rotate")
+    ).strip().lower()
+
     force = bool(
-        payload.get(
-            "force",
-            False,
-        )
+        payload.get("force", False)
     )
+
+    request_id = payload.get("request_id")
+
+    if action not in {
+        "rotate",
+        "activate",
+    }:
+        return jsonify(
+            error="Acción de credencial inválida"
+        ), 400
 
     if not device_id:
         return jsonify(
@@ -284,6 +337,18 @@ def activate_rotated_key():
             )
         ), 400
 
+    if request_id is not None:
+        try:
+            request_id = int(request_id)
+
+        except (
+            TypeError,
+            ValueError,
+        ):
+            return jsonify(
+                error="request_id inválido"
+            ), 400
+
     connection = db()
 
     try:
@@ -295,6 +360,60 @@ def activate_rotated_key():
                     cursor
                 )
 
+                rotation_request = None
+
+                if request_id is not None:
+                    cursor.execute(
+                        """
+                        SELECT
+                            id,
+                            device_id,
+                            action,
+                            status
+                        FROM api_key_rotation_requests
+                        WHERE id = %s
+                        FOR UPDATE
+                        """,
+                        (
+                            request_id,
+                        ),
+                    )
+
+                    rotation_request = (
+                        cursor.fetchone()
+                    )
+
+                    if not rotation_request:
+                        return jsonify(
+                            error=(
+                                "Solicitud de rotación "
+                                "no encontrada"
+                            )
+                        ), 404
+
+                    if (
+                        rotation_request["device_id"]
+                        != device_id
+                        or rotation_request["action"]
+                        != action
+                    ):
+                        return jsonify(
+                            error=(
+                                "La solicitud no corresponde "
+                                "al dispositivo o acción"
+                            )
+                        ), 409
+
+                    if (
+                        rotation_request["status"]
+                        == "cancelled"
+                    ):
+                        return jsonify(
+                            error=(
+                                "La solicitud fue cancelada"
+                            )
+                        ), 409
+
                 cursor.execute(
                     """
                     SELECT
@@ -304,10 +423,8 @@ def activate_rotated_key():
                         credential_version,
                         next_key_rotation_at,
                         (
-                            next_key_rotation_at
-                                IS NULL
-                            OR next_key_rotation_at
-                                <= NOW()
+                            next_key_rotation_at IS NULL
+                            OR next_key_rotation_at <= NOW()
                         ) AS rotation_due
                     FROM devices
                     WHERE device_id = %s
@@ -322,25 +439,13 @@ def activate_rotated_key():
 
                 if not device:
                     return jsonify(
-                        error=(
-                            "Dispositivo no encontrado"
-                        )
+                        error="Dispositivo no encontrado"
                     ), 404
-
-                if device["status"] != "active":
-                    return jsonify(
-                        error=(
-                            "El dispositivo no está activo"
-                        )
-                    ), 409
 
                 new_hash = hash_api_key(
                     new_api_key
                 )
 
-                # Recuperación idempotente:
-                # si el backend ya instaló esta misma
-                # clave, puede confirmarla otra vez.
                 cursor.execute(
                     """
                     SELECT
@@ -359,6 +464,27 @@ def activate_rotated_key():
                 existing = cursor.fetchone()
 
                 if existing:
+                    if request_id is not None:
+                        cursor.execute(
+                            """
+                            UPDATE api_key_rotation_requests
+                            SET
+                                backend_installed_at =
+                                    COALESCE(
+                                        backend_installed_at,
+                                        NOW()
+                                    ),
+                                credential_version = %s
+                            WHERE id = %s
+                            """,
+                            (
+                                existing[
+                                    "credential_version"
+                                ],
+                                request_id,
+                            ),
+                        )
+
                     return jsonify(
                         device_id=device_id,
                         status="already_current",
@@ -370,45 +496,83 @@ def activate_rotated_key():
                         idempotent=True,
                     )
 
-                if (
-                    not force
-                    and not device["rotation_due"]
-                ):
-                    return jsonify(
-                        error=(
-                            "La rotación todavía "
-                            "no está programada"
-                        ),
-                        next_key_rotation_at=(
-                            device[
-                                "next_key_rotation_at"
-                            ].isoformat()
-                            if device[
-                                "next_key_rotation_at"
-                            ]
-                            else None
-                        ),
-                    ), 409
+                if action == "rotate":
+                    if device["status"] != "active":
+                        return jsonify(
+                            error=(
+                                "El dispositivo debe estar "
+                                "activo para rotar"
+                            )
+                        ), 409
 
-                result = (
-                    install_device_credential(
-                        cursor,
-                        device,
-                        device_id,
-                        new_api_key,
-                        "rotate",
-                    )
+                    if (
+                        request_id is None
+                        and not force
+                        and not device["rotation_due"]
+                    ):
+                        return jsonify(
+                            error=(
+                                "La rotación todavía "
+                                "no está programada"
+                            )
+                        ), 409
+
+                if action == "activate":
+                    if device["status"] == "active":
+                        return jsonify(
+                            error=(
+                                "El dispositivo ya está activo"
+                            )
+                        ), 409
+
+                result = install_device_credential(
+                    cursor,
+                    device,
+                    device_id,
+                    new_api_key,
+                    action,
                 )
 
-                write_system_audit(
-                    cursor,
-                    (
+                if request_id is not None:
+                    cursor.execute(
+                        """
+                        UPDATE api_key_rotation_requests
+                        SET
+                            backend_installed_at = NOW(),
+                            credential_version = %s,
+                            last_error = NULL
+                        WHERE id = %s
+                        """,
+                        (
+                            result["new_version"],
+                            request_id,
+                        ),
+                    )
+
+                if request_id is not None:
+                    audit_action = (
+                        "device_manual_activate_completed"
+                        if action == "activate"
+                        else "api_key_manual_rotate_completed"
+                    )
+                else:
+                    audit_action = (
                         "api_key_auto_rotate_force"
                         if force
                         else "api_key_auto_rotate"
-                    ),
+                    )
+
+                write_system_audit(
+                    cursor,
+                    audit_action,
                     device_id,
                     details={
+                        "request_id":
+                            request_id,
+
+                        "action":
+                            action,
+
                         "previous_version":
                             result[
                                 "previous_version"
@@ -429,14 +593,15 @@ def activate_rotated_key():
                                 "grace_seconds"
                             ],
 
-                        "forced":
-                            force,
+                        "automatic_file_update":
+                            True,
                     },
                 )
 
         return jsonify(
             device_id=device_id,
-            status="rotated",
+            action=action,
+            status="installed",
             credential_version=(
                 result["new_version"]
             ),
@@ -444,6 +609,138 @@ def activate_rotated_key():
                 result["grace_seconds"]
             ),
             idempotent=False,
+        )
+
+    finally:
+        connection.close()
+
+
+@key_rotation_bp.post(
+    "/api/v1/internal/key-rotation/"
+    "requests/<int:request_id>/complete"
+)
+@rotator_token_required
+def complete_manual_request(request_id):
+    payload = request.get_json(
+        silent=True
+    ) or {}
+
+    credential_version = payload.get(
+        "credential_version"
+    )
+
+    connection = db()
+
+    try:
+        with connection:
+            with connection.cursor(
+                cursor_factory=RealDictCursor
+            ) as cursor:
+                cursor.execute(
+                    """
+                    UPDATE api_key_rotation_requests
+                    SET
+                        status = 'completed',
+                        completed_at = NOW(),
+                        credential_version =
+                            COALESCE(
+                                %s,
+                                credential_version
+                            ),
+                        last_error = NULL
+                    WHERE id = %s
+                      AND status = 'pending'
+                    RETURNING
+                        id,
+                        device_id,
+                        action,
+                        status
+                    """,
+                    (
+                        credential_version,
+                        request_id,
+                    ),
+                )
+
+                row = cursor.fetchone()
+
+                if not row:
+                    cursor.execute(
+                        """
+                        SELECT
+                            id,
+                            device_id,
+                            action,
+                            status
+                        FROM api_key_rotation_requests
+                        WHERE id = %s
+                        """,
+                        (
+                            request_id,
+                        ),
+                    )
+
+                    row = cursor.fetchone()
+
+                if not row:
+                    return jsonify(
+                        error=(
+                            "Solicitud no encontrada"
+                        )
+                    ), 404
+
+        return jsonify(
+            request_id=row["id"],
+            device_id=row["device_id"],
+            action=row["action"],
+            status=row["status"],
+        )
+
+    finally:
+        connection.close()
+
+
+@key_rotation_bp.post(
+    "/api/v1/internal/key-rotation/"
+    "requests/<int:request_id>/error"
+)
+@rotator_token_required
+def report_manual_request_error(request_id):
+    payload = request.get_json(
+        silent=True
+    ) or {}
+
+    error_message = str(
+        payload.get(
+            "error",
+            "Error no especificado",
+        )
+    )[:2000]
+
+    connection = db()
+
+    try:
+        with connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    UPDATE api_key_rotation_requests
+                    SET
+                        attempts = attempts + 1,
+                        last_error = %s
+                    WHERE id = %s
+                      AND status = 'pending'
+                    """,
+                    (
+                        error_message,
+                        request_id,
+                    ),
+                )
+
+        return jsonify(
+            request_id=request_id,
+            status="pending",
+            error_recorded=True,
         )
 
     finally:

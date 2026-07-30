@@ -120,6 +120,56 @@
                 ></div>
             </section>
 
+
+            <section
+                id="history-section"
+                class="history-section"
+            >
+                <div class="section-heading history-heading">
+                    <div>
+                        <p class="eyebrow">Evolución temporal</p>
+                        <h2>Últimas 20 mediciones</h2>
+
+                        <p class="history-description">
+                            Tendencia reciente por área y dispositivo.
+                        </p>
+                    </div>
+
+                    <div class="history-controls">
+                        <label for="history-metric">
+                            Variable mostrada
+                        </label>
+
+                        <select id="history-metric">
+                            <option value="temperature">
+                                Temperatura
+                            </option>
+
+                            <option value="humidity">
+                                Humedad
+                            </option>
+
+                            <option value="co2">
+                                CO₂
+                            </option>
+                        </select>
+                    </div>
+                </div>
+
+                <div
+                    id="history-message"
+                    class="message"
+                    aria-live="polite"
+                >
+                    Consultando historial de mediciones...
+                </div>
+
+                <div
+                    id="history-charts"
+                    class="history-grid"
+                ></div>
+            </section>
+
             <section class="table-section">
                 <div class="section-heading">
                     <div>
@@ -145,13 +195,6 @@
                         <tbody id="telemetry-table"></tbody>
                     </table>
                 </div>
-            </section>
-
-            <section class="notice">
-                <strong>Nota:</strong>
-                los colores utilizan límites configurados para este
-                prototipo académico. No corresponden a criterios
-                clínicos oficiales.
             </section>
         </section>
 
@@ -301,6 +344,7 @@
     </footer>
 
     <script src="app.js?v=3"></script>
+    <script src="charts.js?v=1"></script>
     <script src="devices.js?v=1"></script>
 </body>
 </html>

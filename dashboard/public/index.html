@@ -10,7 +10,7 @@
 
     <title>Monitoreo Ambiental Hospitalario</title>
 
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css?v=3">
 </head>
 
 <body>
@@ -18,90 +18,281 @@
         <div>
             <p class="eyebrow">Plataforma IoT hospitalaria</p>
             <h1>Monitoreo ambiental</h1>
+
             <p class="subtitle">
-                Temperatura, humedad y concentración de CO₂
+                Temperatura, humedad, CO₂ y estado de dispositivos
             </p>
         </div>
 
-        <button id="refresh-button" type="button">
-            Actualizar
-        </button>
+        <div id="header-actions">
+            <button
+                id="refresh-button"
+                type="button"
+            >
+                Actualizar mediciones
+            </button>
+        </div>
     </header>
 
     <main class="container">
-        <section class="summary">
-            <article class="summary-card">
-                <span>Áreas supervisadas</span>
-                <strong id="area-count">3</strong>
-            </article>
+        <nav
+            class="dashboard-tabs"
+            aria-label="Secciones del dashboard"
+        >
+            <button
+                id="tab-monitoring"
+                class="dashboard-tab active"
+                type="button"
+                role="tab"
+                aria-selected="true"
+                aria-controls="view-monitoring"
+                data-view="monitoring"
+            >
+                Monitoreo
+            </button>
 
-            <article class="summary-card">
-                <span>Áreas con datos</span>
-                <strong id="areas-with-data">0</strong>
-            </article>
+            <button
+                id="tab-devices"
+                class="dashboard-tab"
+                type="button"
+                role="tab"
+                aria-selected="false"
+                aria-controls="view-devices"
+                data-view="devices"
+            >
+                Dispositivos
+            </button>
+        </nav>
 
-            <article class="summary-card">
-                <span>Áreas en alerta</span>
-                <strong id="alert-count">0</strong>
-            </article>
-
-            <article class="summary-card">
-                <span>Última consulta</span>
-                <strong id="last-update">Sin actualizar</strong>
-            </article>
-        </section>
+        <!-- =================================================
+             PESTAÑA DE MONITOREO
+        ================================================== -->
 
         <section
-            id="connection-message"
-            class="message"
-            aria-live="polite"
+            id="view-monitoring"
+            class="dashboard-view"
+            role="tabpanel"
+            aria-labelledby="tab-monitoring"
         >
-            Consultando información del backend...
-        </section>
+            <section class="summary">
+                <article class="summary-card">
+                    <span>Áreas supervisadas</span>
+                    <strong id="area-count">3</strong>
+                </article>
 
-        <section>
-            <div class="section-heading">
-                <div>
-                    <p class="eyebrow">Estado actual</p>
-                    <h2>Áreas hospitalarias</h2>
+                <article class="summary-card">
+                    <span>Áreas con datos</span>
+                    <strong id="areas-with-data">0</strong>
+                </article>
+
+                <article class="summary-card">
+                    <span>Áreas en alerta</span>
+                    <strong id="alert-count">0</strong>
+                </article>
+
+                <article class="summary-card">
+                    <span>Última consulta</span>
+                    <strong id="last-update">
+                        Sin actualizar
+                    </strong>
+                </article>
+            </section>
+
+            <section
+                id="connection-message"
+                class="message"
+                aria-live="polite"
+            >
+                Consultando información del backend...
+            </section>
+
+            <section>
+                <div class="section-heading">
+                    <div>
+                        <p class="eyebrow">Estado actual</p>
+                        <h2>Áreas hospitalarias</h2>
+                    </div>
                 </div>
-            </div>
 
-            <div id="area-cards" class="area-grid"></div>
-        </section>
+                <div
+                    id="area-cards"
+                    class="area-grid"
+                ></div>
+            </section>
 
-        <section class="table-section">
-            <div class="section-heading">
-                <div>
-                    <p class="eyebrow">Resumen</p>
-                    <h2>Últimas mediciones</h2>
+            <section class="table-section">
+                <div class="section-heading">
+                    <div>
+                        <p class="eyebrow">Resumen</p>
+                        <h2>Últimas mediciones</h2>
+                    </div>
                 </div>
-            </div>
 
-            <div class="table-wrapper">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Área</th>
-                            <th>Dispositivo</th>
-                            <th>Temperatura</th>
-                            <th>Humedad</th>
-                            <th>CO₂</th>
-                            <th>Estado</th>
-                            <th>Fecha</th>
-                        </tr>
-                    </thead>
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Área</th>
+                                <th>Dispositivo</th>
+                                <th>Temperatura</th>
+                                <th>Humedad</th>
+                                <th>CO₂</th>
+                                <th>Estado</th>
+                                <th>Fecha</th>
+                            </tr>
+                        </thead>
 
-                    <tbody id="telemetry-table"></tbody>
-                </table>
-            </div>
+                        <tbody id="telemetry-table"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="notice">
+                <strong>Nota:</strong>
+                los colores utilizan límites configurados para este
+                prototipo académico. No corresponden a criterios
+                clínicos oficiales.
+            </section>
         </section>
 
-        <section class="notice">
-            <strong>Nota:</strong>
-            los colores utilizan límites de demostración configurados
-            para este prototipo académico. No corresponden a criterios
-            clínicos oficiales.
+        <!-- =================================================
+             PESTAÑA DE DISPOSITIVOS
+        ================================================== -->
+
+        <section
+            id="view-devices"
+            class="dashboard-view"
+            role="tabpanel"
+            aria-labelledby="tab-devices"
+            hidden
+        >
+            <div class="view-header">
+                <div>
+                    <p class="eyebrow">Inventario IoT</p>
+                    <h2>Dispositivos registrados</h2>
+
+                    <p class="view-description">
+                        Consulta general de nodos inscritos en la
+                        plataforma. Esta vista no expone credenciales
+                        ni hashes.
+                    </p>
+                </div>
+
+                <button
+                    id="refresh-devices-button"
+                    type="button"
+                >
+                    Actualizar dispositivos
+                </button>
+            </div>
+
+            <section class="summary device-summary">
+                <article class="summary-card">
+                    <span>Total registrados</span>
+                    <strong id="device-total">0</strong>
+                </article>
+
+                <article class="summary-card">
+                    <span>Dispositivos activos</span>
+                    <strong id="device-active">0</strong>
+                </article>
+
+                <article class="summary-card">
+                    <span>Dispositivos revocados</span>
+                    <strong id="device-revoked">0</strong>
+                </article>
+
+                <article class="summary-card">
+                    <span>Sin telemetría registrada</span>
+                    <strong id="device-never-seen">0</strong>
+                </article>
+            </section>
+
+            <section
+                id="devices-message"
+                class="message"
+                aria-live="polite"
+            >
+                Selecciona la pestaña para consultar los dispositivos.
+            </section>
+
+            <section>
+                <div class="section-heading">
+                    <div>
+                        <p class="eyebrow">Estado de nodos</p>
+                        <h2>Listado general</h2>
+                    </div>
+
+                    <div class="device-filters">
+                        <label for="device-area-filter">
+                            Área
+                        </label>
+
+                        <select id="device-area-filter">
+                            <option value="all">
+                                Todas
+                            </option>
+                            <option value="uci">
+                                UCI
+                            </option>
+                            <option value="urgencias">
+                                Urgencias
+                            </option>
+                            <option value="laboratorio">
+                                Laboratorio
+                            </option>
+                        </select>
+
+                        <label for="device-status-filter">
+                            Estado
+                        </label>
+
+                        <select id="device-status-filter">
+                            <option value="all">
+                                Todos
+                            </option>
+                            <option value="active">
+                                Activos
+                            </option>
+                            <option value="revoked">
+                                Revocados
+                            </option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Dispositivo</th>
+                                <th>Nombre</th>
+                                <th>Área</th>
+                                <th>Estado</th>
+                                <th>Última comunicación</th>
+                                <th>Registrado</th>
+                            </tr>
+                        </thead>
+
+                        <tbody id="devices-table"></tbody>
+                    </table>
+                </div>
+
+                <p
+                    id="devices-empty"
+                    class="empty-state"
+                    hidden
+                >
+                    No se encontraron dispositivos para los filtros
+                    seleccionados.
+                </p>
+            </section>
+
+            <section class="notice device-security-note">
+                <strong>Seguridad:</strong>
+                esta pestaña utiliza la vista pública del backend y
+                no recibe API Keys, hashes ni contraseñas MQTT.
+            </section>
         </section>
     </main>
 
@@ -109,6 +300,7 @@
         Sistema IoT para monitoreo ambiental hospitalario
     </footer>
 
-    <script src="app.js"></script>
+    <script src="app.js?v=3"></script>
+    <script src="devices.js?v=1"></script>
 </body>
 </html>

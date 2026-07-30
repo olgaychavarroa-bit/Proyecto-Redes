@@ -7,7 +7,6 @@ services:
     restart: always
 
     ports:
-      - "1883:1883"
       - "8883:8883"
 
     volumes:
@@ -79,27 +78,29 @@ services:
     networks:
       - appnet
 
-
   simulator-uci:
     build:
       context: ./simulator
       args:
         SIM_UID: ${LOCAL_UID:-1000}
         SIM_GID: ${LOCAL_GID:-1000}
+
     image: iot-simulator-image:1.0
     container_name: iot-simulator-uci
     restart: always
+
     depends_on:
       - mosquitto
+
     environment:
       DEVICE_ID: iot_uci_01
       AREA: uci
       MQTT_HOST: iot-mosquitto
       MQTT_PORT: "8883"
       MQTT_TOPIC: hospital/uci/telemetry
-      MQTT_USERNAME: iot_uci
+      MQTT_USERNAME: iot_uci_01
       MQTT_CA_CERT: /app/certs/ca.crt
-      MQTT_PASSWORD_FILE: /run/secrets/simulator/mqtt_password
+      MQTT_PASSWORD_FILE: /run/secrets/simulator/api_key
       API_KEY_FILE: /run/secrets/simulator/api_key
       PUBLISH_INTERVAL: "10"
       BASE_TEMPERATURE: "24.0"
@@ -109,16 +110,22 @@ services:
       ANOMALY_CRITICAL_PROBABILITY: "0.30"
       ANOMALY_MIN_CYCLES: "2"
       ANOMALY_MAX_CYCLES: "4"
+
     volumes:
       - ./secrets/simulators/uci:/run/secrets/simulator:ro
       - ./broker/certs/ca/ca.crt:/app/certs/ca.crt:ro
+
     read_only: true
+
     tmpfs:
       - /tmp
+
     cap_drop:
       - ALL
+
     security_opt:
       - no-new-privileges:true
+
     networks:
       - appnet
 
@@ -128,20 +135,23 @@ services:
       args:
         SIM_UID: ${LOCAL_UID:-1000}
         SIM_GID: ${LOCAL_GID:-1000}
+
     image: iot-simulator-image:1.0
     container_name: iot-simulator-urgencias
     restart: always
+
     depends_on:
       - mosquitto
+
     environment:
       DEVICE_ID: iot_urgencias_01
       AREA: urgencias
       MQTT_HOST: iot-mosquitto
       MQTT_PORT: "8883"
       MQTT_TOPIC: hospital/urgencias/telemetry
-      MQTT_USERNAME: iot_urgencias
+      MQTT_USERNAME: iot_urgencias_01
       MQTT_CA_CERT: /app/certs/ca.crt
-      MQTT_PASSWORD_FILE: /run/secrets/simulator/mqtt_password
+      MQTT_PASSWORD_FILE: /run/secrets/simulator/api_key
       API_KEY_FILE: /run/secrets/simulator/api_key
       PUBLISH_INTERVAL: "10"
       BASE_TEMPERATURE: "25.0"
@@ -151,16 +161,22 @@ services:
       ANOMALY_CRITICAL_PROBABILITY: "0.30"
       ANOMALY_MIN_CYCLES: "2"
       ANOMALY_MAX_CYCLES: "4"
+
     volumes:
       - ./secrets/simulators/urgencias:/run/secrets/simulator:ro
       - ./broker/certs/ca/ca.crt:/app/certs/ca.crt:ro
+
     read_only: true
+
     tmpfs:
       - /tmp
+
     cap_drop:
       - ALL
+
     security_opt:
       - no-new-privileges:true
+
     networks:
       - appnet
 
@@ -170,20 +186,23 @@ services:
       args:
         SIM_UID: ${LOCAL_UID:-1000}
         SIM_GID: ${LOCAL_GID:-1000}
+
     image: iot-simulator-image:1.0
     container_name: iot-simulator-laboratorio
     restart: always
+
     depends_on:
       - mosquitto
+
     environment:
       DEVICE_ID: iot_laboratorio_01
       AREA: laboratorio
       MQTT_HOST: iot-mosquitto
       MQTT_PORT: "8883"
       MQTT_TOPIC: hospital/laboratorio/telemetry
-      MQTT_USERNAME: iot_laboratorio
+      MQTT_USERNAME: iot_laboratorio_01
       MQTT_CA_CERT: /app/certs/ca.crt
-      MQTT_PASSWORD_FILE: /run/secrets/simulator/mqtt_password
+      MQTT_PASSWORD_FILE: /run/secrets/simulator/api_key
       API_KEY_FILE: /run/secrets/simulator/api_key
       PUBLISH_INTERVAL: "10"
       BASE_TEMPERATURE: "22.0"
@@ -193,19 +212,24 @@ services:
       ANOMALY_CRITICAL_PROBABILITY: "0.30"
       ANOMALY_MIN_CYCLES: "2"
       ANOMALY_MAX_CYCLES: "4"
+
     volumes:
       - ./secrets/simulators/laboratorio:/run/secrets/simulator:ro
       - ./broker/certs/ca/ca.crt:/app/certs/ca.crt:ro
+
     read_only: true
+
     tmpfs:
       - /tmp
+
     cap_drop:
       - ALL
+
     security_opt:
       - no-new-privileges:true
+
     networks:
       - appnet
-
 
   key-rotator:
     build:
@@ -213,30 +237,105 @@ services:
       args:
         ROTATOR_UID: ${LOCAL_UID:-1000}
         ROTATOR_GID: ${LOCAL_GID:-1000}
+
     image: iot-key-rotator-image:1.0
     container_name: iot-key-rotator
     restart: always
+
     depends_on:
       - backend
+
     environment:
       BACKEND_URL: http://iot-backend:5000
       ROTATOR_TOKEN_FILE: /run/secrets/rotator/service_token
       ROTATOR_CHECK_INTERVAL: ${ROTATOR_CHECK_INTERVAL:-3600}
       ROTATOR_REQUEST_INTERVAL: ${ROTATOR_REQUEST_INTERVAL:-5}
-      ROTATOR_DEVICE_MAP: iot_uci_01=uci,iot_urgencias_01=urgencias,iot_laboratorio_01=laboratorio
+      ROTATOR_DEVICE_MAP: >-
+        iot_uci_01=uci,
+        iot_urgencias_01=urgencias,
+        iot_laboratorio_01=laboratorio
       KEY_ROOT: /keys
+      BROKER_AUTH_FILE: /broker-config/passwd-mqtt
+      BROKER_AUTH_DEVICE_MAP: >-
+        iot_uci_01=iot_uci_01,
+        iot_urgencias_01=iot_urgencias_01,
+        iot_laboratorio_01=iot_laboratorio_01
+
     volumes:
       - ./secrets/rotator/service_token:/run/secrets/rotator/service_token:ro
       - ./secrets/simulators:/keys
+      - ./broker/config:/broker-config
+
     read_only: true
+
     tmpfs:
       - /tmp
+
     cap_drop:
       - ALL
+
     security_opt:
       - no-new-privileges:true
+
     networks:
       - appnet
+
+  mosquitto-auth-reloader:
+    image: alpine:3.20
+    container_name: iot-mosquitto-auth-reloader
+
+    pid: "service:mosquitto"
+    network_mode: "none"
+
+    depends_on:
+      mosquitto:
+        condition: service_started
+
+    user: "0:0"
+
+    cap_drop:
+      - ALL
+
+    cap_add:
+      - KILL
+
+    security_opt:
+      - no-new-privileges:true
+
+    read_only: true
+    restart: always
+
+    volumes:
+      - type: bind
+        source: ./broker/config
+        target: /watch
+        read_only: true
+
+    command:
+      - /bin/sh
+      - -c
+      - |
+        FILE=/watch/passwd-mqtt
+
+        while [ ! -s "$$FILE" ]; do
+          echo "[reloader] esperando credenciales"
+          sleep 1
+        done
+
+        LAST="$$(sha256sum "$$FILE" | cut -d' ' -f1)"
+
+        echo "[reloader] vigilando credenciales MQTT"
+
+        while sleep 2; do
+          CURRENT="$$(sha256sum "$$FILE" | cut -d' ' -f1)"
+
+          if [ "$$CURRENT" != "$$LAST" ]; then
+            kill -HUP 1
+            LAST="$$CURRENT"
+
+            echo "[reloader] SIGHUP enviado a Mosquitto"
+          fi
+        done
 
 networks:
   appnet:

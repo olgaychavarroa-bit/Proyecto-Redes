@@ -19,3 +19,4 @@ venv/
 secrets/
 backups/
 broker/certs/
+broker/auth/

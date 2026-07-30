@@ -87,6 +87,7 @@ def parse_device_map():
 DEVICE_MAP = parse_device_map()
 
 
+
 def read_token():
     token = Path(
         ROTATOR_TOKEN_FILE
@@ -641,6 +642,8 @@ def run_due_rotations():
             )
 
 
+
+
 def handle_signal(signum, frame):
     global stop_requested
 
@@ -671,6 +674,33 @@ def main():
         f"solicitudes={ROTATOR_REQUEST_INTERVAL}s | "
         f"programadas={ROTATOR_CHECK_INTERVAL}s"
     )
+
+    # Esperar hasta que el backend esté disponible.
+    while not stop_requested:
+        try:
+            request_json(
+                "/api/v1/internal/"
+                "key-rotation/requests"
+            )
+
+            print(
+                "[rotador] backend disponible",
+                flush=True,
+            )
+
+            break
+
+        except Exception as error:
+            print(
+                "[rotador] esperando al backend | "
+                f"{error}",
+                flush=True,
+            )
+
+            time.sleep(3)
+
+    if stop_requested:
+        return
 
     recover_pending_files()
 

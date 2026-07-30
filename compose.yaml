@@ -8,11 +8,14 @@ services:
 
     ports:
       - "1883:1883"
+      - "8883:8883"
 
     volumes:
       - ./broker/config:/mosquitto/config
       - ./broker/data:/mosquitto/data
       - ./broker/log:/mosquitto/log
+      - ./broker/certs/server/server.crt:/mosquitto/certs/server.crt:ro
+      - ./broker/certs/server/server.key:/mosquitto/certs/server.key:ro
 
     networks:
       - appnet
@@ -44,6 +47,9 @@ services:
 
     env_file:
       - ./.env
+
+    volumes:
+      - ./broker/certs/ca/ca.crt:/app/certs/ca.crt:ro
 
     ports:
       - "5000:5000"

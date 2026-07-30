@@ -18,3 +18,4 @@ venv/
 *.pem
 secrets/
 backups/
+broker/certs/

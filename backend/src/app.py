@@ -4,6 +4,7 @@ import json
 import math
 import os
 import secrets
+import ssl
 from typing import Any
 
 import paho.mqtt.client as mqtt
@@ -23,6 +24,19 @@ MQTT_PORT = int(os.environ.get("MQTT_PORT", "1883"))
 MQTT_USER = os.environ["MQTT_USER"]
 MQTT_PASSWORD = os.environ["MQTT_PASSWORD"]
 MQTT_TOPIC = os.environ.get("MQTT_TOPIC", "hospital/+/telemetry")
+
+
+MQTT_TLS_ENABLED = (
+    os.environ.get("MQTT_TLS_ENABLED", "false")
+    .strip()
+    .lower()
+    in {"1", "true", "yes", "on"}
+)
+
+MQTT_CA_CERT = os.environ.get(
+    "MQTT_CA_CERT",
+    "/app/certs/ca.crt",
+)
 
 POSTGRES_HOST = os.environ["POSTGRES_HOST"]
 POSTGRES_PORT = int(os.environ.get("POSTGRES_PORT", "5432"))
@@ -648,6 +662,20 @@ def start_mqtt():
     mqtt_client.on_connect = on_connect
     mqtt_client.on_disconnect = on_disconnect
     mqtt_client.on_message = on_message
+
+
+    if MQTT_TLS_ENABLED:
+        print(
+            f"[mqtt] TLS activado; "
+            f"CA={MQTT_CA_CERT}"
+        )
+
+        mqtt_client.tls_set(
+            ca_certs=MQTT_CA_CERT,
+            cert_reqs=ssl.CERT_REQUIRED,
+        )
+
+        mqtt_client.tls_insecure_set(False)
 
     mqtt_client.connect_async(
         MQTT_HOST,

@@ -877,3 +877,111 @@ footer {
         flex-direction: column;
     }
 }
+
+
+/* ============================================================
+   ESTADOS DE SENSORES Y ALARMAS EN ESPAÑOL
+============================================================ */
+
+.sensor-state-normal,
+.sensor-state-warning,
+.sensor-state-critical {
+    position: relative;
+    transition:
+        background-color 0.2s ease,
+        border-color 0.2s ease;
+}
+
+.sensor-state-warning {
+    border: 1px solid #e8a317 !important;
+    background: #fff5d8 !important;
+}
+
+.sensor-state-critical {
+    border: 1px solid #dc3545 !important;
+    background: #fde8e8 !important;
+}
+
+.sensor-state-label {
+    display: block;
+    width: fit-content;
+    margin: 5px auto 0;
+    border-radius: 999px;
+    padding: 3px 7px;
+    font-size: 0.58rem;
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: 0.03em;
+}
+
+.sensor-state-normal
+.sensor-state-label {
+    color: #08783e;
+    background: #daf8e8;
+}
+
+.sensor-state-warning
+.sensor-state-label {
+    color: #815300;
+    background: #ffe4a3;
+}
+
+.sensor-state-critical
+.sensor-state-label {
+    color: #991b1b;
+    background: #fecaca;
+}
+
+
+/* Estado general de la tarjeta */
+
+.translated-status-normal {
+    color: #08783e !important;
+    background: #daf8e8 !important;
+}
+
+.translated-status-warning {
+    color: #815300 !important;
+    background: #ffe4a3 !important;
+}
+
+.translated-status-critical {
+    color: #991b1b !important;
+    background: #fecaca !important;
+}
+
+
+/* Explicación de la alarma */
+
+.area-alert-detail {
+    margin: 10px 12px 12px;
+    border-radius: 9px;
+    padding: 10px 12px;
+    font-size: 0.74rem;
+}
+
+.area-alert-warning {
+    border: 1px solid #e8a317;
+    color: #674500;
+    background: #fff5d8;
+}
+
+.area-alert-critical {
+    border: 1px solid #dc3545;
+    color: #861313;
+    background: #fde8e8;
+}
+
+.area-alert-heading {
+    display: block;
+    margin-bottom: 5px;
+}
+
+.area-alert-detail ul {
+    margin: 0;
+    padding-left: 18px;
+}
+
+.area-alert-detail li + li {
+    margin-top: 3px;
+}

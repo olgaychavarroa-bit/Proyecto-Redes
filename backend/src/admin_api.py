@@ -6,6 +6,7 @@ from datetime import datetime
 
 import psycopg2
 from admin_auth import jwt_required
+from credential_service import install_device_credential
 from flask import Blueprint, g, jsonify, request
 from psycopg2.extras import Json, RealDictCursor
 
@@ -366,91 +367,13 @@ def create_credential(
 ):
     new_api_key = secrets.token_urlsafe(32)
 
-    new_hash = hash_api_key(
-        new_api_key
+    result = install_device_credential(
+        cursor,
+        device,
+        device_id,
+        new_api_key,
+        action,
     )
-
-    new_version = (
-        int(device["credential_version"])
-        + 1
-    )
-
-    cursor.execute(
-        """
-        UPDATE device_credentials
-        SET
-            status = 'revoked',
-            revoked_at = COALESCE(
-                revoked_at,
-                NOW()
-            )
-        WHERE device_id = %s
-          AND status IN (
-              'current',
-              'grace'
-          )
-        """,
-        (device_id,),
-    )
-
-    cursor.execute(
-        """
-        INSERT INTO device_credentials (
-            device_id,
-            api_key_hash,
-            credential_version,
-            status
-        )
-        VALUES (
-            %s,
-            %s,
-            %s,
-            'current'
-        )
-        """,
-        (
-            device_id,
-            new_hash,
-            new_version,
-        ),
-    )
-
-    if action == "activate":
-        cursor.execute(
-            """
-            UPDATE devices
-            SET
-                status = 'active',
-                api_key_hash = %s,
-                credential_version = %s,
-                reactivated_at = NOW(),
-                revoked_at = NULL,
-                last_key_rotation_at = NOW()
-            WHERE device_id = %s
-            """,
-            (
-                new_hash,
-                new_version,
-                device_id,
-            ),
-        )
-
-    else:
-        cursor.execute(
-            """
-            UPDATE devices
-            SET
-                api_key_hash = %s,
-                credential_version = %s,
-                last_key_rotation_at = NOW()
-            WHERE device_id = %s
-            """,
-            (
-                new_hash,
-                new_version,
-                device_id,
-            ),
-        )
 
     write_audit(
         conn,
@@ -462,17 +385,26 @@ def create_credential(
         device_id,
         details={
             "previous_version":
-                device[
-                    "credential_version"
-                ],
+                result["previous_version"],
+
             "new_version":
-                new_version,
+                result["new_version"],
+
             "hash_fingerprint":
-                new_hash[-12:],
+                result["hash_fingerprint"],
+
+            "grace_seconds":
+                result["grace_seconds"],
+
+            "next_rotation_days":
+                result["rotation_days"],
         },
     )
 
-    return new_api_key, new_version
+    return (
+        new_api_key,
+        result["new_version"],
+    )
 
 
 # ============================================================
@@ -609,7 +541,8 @@ def rotate_device(device_id):
             api_key=new_key,
             warning=(
                 "Guarde la nueva API Key. "
-                "La anterior dejó de funcionar."
+                "La clave anterior funcionará durante "
+                "el periodo de gracia configurado."
             ),
         )
 

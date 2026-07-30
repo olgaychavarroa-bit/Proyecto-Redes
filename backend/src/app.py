@@ -12,6 +12,8 @@ import psycopg2
 from flask import Flask, jsonify, request
 from admin_api import admin_bp, public_bp
 from admin_auth import auth_bp
+from key_rotation_api import key_rotation_bp
+from credential_service import validate_device_api_key
 from telemetry_admin import start_retention_worker, telemetry_admin_bp
 from psycopg2.extras import RealDictCursor
 
@@ -53,6 +55,7 @@ app = Flask(__name__)
 app.register_blueprint(public_bp)
 app.register_blueprint(admin_bp)
 app.register_blueprint(auth_bp)
+app.register_blueprint(key_rotation_bp)
 app.register_blueprint(telemetry_admin_bp)
 mqtt_client: mqtt.Client | None = None
 
@@ -593,14 +596,39 @@ def on_message(client, userdata, message):
                     )
                     return
 
-                if not verify_api_key(
+                credential = validate_device_api_key(
+                    cur,
+                    device_id,
+                    api_key,
+                )
+
+                # Compatibilidad para dispositivos antiguos
+                # que todavía no tengan historial en
+                # device_credentials.
+                fallback_valid = verify_api_key(
                     api_key,
                     device["api_key_hash"],
+                )
+
+                if (
+                    credential is None
+                    and not fallback_valid
                 ):
                     print(
                         f"[rechazado] API Key incorrecta: {device_id}"
                     )
                     return
+
+                if (
+                    credential is not None
+                    and credential["status"] == "grace"
+                ):
+                    print(
+                        "[mqtt] credencial en gracia aceptada | "
+                        f"device={device_id} | "
+                        f"versión="
+                        f"{credential['credential_version']}"
+                    )
 
                 cur.execute(
                     """

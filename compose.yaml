@@ -50,6 +50,7 @@ services:
 
     volumes:
       - ./broker/certs/ca/ca.crt:/app/certs/ca.crt:ro
+      - ./secrets/rotator/service_token:/run/secrets/rotator/service_token:ro
 
     ports:
       - "5000:5000"
@@ -195,6 +196,37 @@ services:
     volumes:
       - ./secrets/simulators/laboratorio:/run/secrets/simulator:ro
       - ./broker/certs/ca/ca.crt:/app/certs/ca.crt:ro
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - appnet
+
+
+  key-rotator:
+    build:
+      context: ./rotator
+      args:
+        ROTATOR_UID: ${LOCAL_UID:-1000}
+        ROTATOR_GID: ${LOCAL_GID:-1000}
+    image: iot-key-rotator-image:1.0
+    container_name: iot-key-rotator
+    restart: always
+    depends_on:
+      - backend
+    environment:
+      BACKEND_URL: http://iot-backend:5000
+      ROTATOR_TOKEN_FILE: /run/secrets/rotator/service_token
+      ROTATOR_CHECK_INTERVAL: ${ROTATOR_CHECK_INTERVAL:-3600}
+      ROTATOR_DEVICE_MAP: iot_uci_01=uci,iot_urgencias_01=urgencias,iot_laboratorio_01=laboratorio
+      KEY_ROOT: /keys
+    volumes:
+      - ./secrets/rotator/service_token:/run/secrets/rotator/service_token:ro
+      - ./secrets/simulators:/keys
     read_only: true
     tmpfs:
       - /tmp

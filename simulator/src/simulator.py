@@ -209,6 +209,48 @@ connected_event = threading.Event()
 stop_event = threading.Event()
 
 
+def watch_mqtt_password_changes(
+    initial_password: str,
+) -> None:
+    """
+    Detecta cambios en la contraseña MQTT.
+
+    Solo se inicia cuando MQTT_PASSWORD_FILE y
+    API_KEY_FILE apuntan al mismo archivo.
+    """
+
+    previous_password = initial_password
+
+    while not stop_event.wait(1):
+        try:
+            current_password = read_secret(
+                MQTT_PASSWORD_FILE,
+                "contraseña MQTT",
+            )
+
+        except Exception as error:
+            print(
+                "[mqtt] no se pudo revisar "
+                f"la credencial | {error}",
+                flush=True,
+            )
+
+            continue
+
+        if current_password == previous_password:
+            continue
+
+        print(
+            "[mqtt] credencial modificada | "
+            f"device={DEVICE_ID} | "
+            "reinicio controlado",
+            flush=True,
+        )
+
+        stop_event.set()
+        return
+
+
 # ============================================================
 # GENERACIÓN DE MEDICIONES NORMALES
 # ============================================================
@@ -656,6 +698,26 @@ def main() -> None:
     )
 
     client.loop_start()
+
+    credential_watcher = None
+
+    # En el piloto, la API Key también es la
+    # contraseña utilizada para entrar a MQTT.
+    if MQTT_PASSWORD_FILE == API_KEY_FILE:
+        credential_watcher = threading.Thread(
+            target=watch_mqtt_password_changes,
+            args=(mqtt_password,),
+            daemon=True,
+            name="mqtt-credential-watcher",
+        )
+
+        credential_watcher.start()
+
+        print(
+            "[mqtt] vigilancia de credencial activa | "
+            f"device={DEVICE_ID}",
+            flush=True,
+        )
 
     try:
         publish_loop(client)

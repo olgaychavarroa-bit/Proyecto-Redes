@@ -20,3 +20,5 @@ secrets/
 backups/
 broker/certs/
 broker/auth/
+broker/config/passwd-api-key-piloto
+rotator/src/rotator.py.antes-broker

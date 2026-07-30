@@ -6,6 +6,13 @@ ARG ROTATOR_GID=1000
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive \
+       apt-get install -y \
+       --no-install-recommends \
+       mosquitto \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN groupadd \
         --gid "${ROTATOR_GID}" rotator \
     && useradd \

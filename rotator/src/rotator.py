@@ -3,6 +3,8 @@ import json
 import os
 import secrets
 import signal
+import shutil
+import subprocess
 import time
 import urllib.error
 import urllib.request
@@ -55,6 +57,22 @@ KEY_ROOT = Path(
     )
 )
 
+BROKER_AUTH_FILE = os.environ.get(
+    "BROKER_AUTH_FILE",
+    "",
+).strip()
+
+BROKER_AUTH_PATH = (
+    Path(BROKER_AUTH_FILE)
+    if BROKER_AUTH_FILE
+    else None
+)
+
+BROKER_AUTH_DEVICE_MAP = os.environ.get(
+    "BROKER_AUTH_DEVICE_MAP",
+    "",
+).strip()
+
 stop_requested = False
 
 
@@ -85,6 +103,44 @@ def parse_device_map():
 
 
 DEVICE_MAP = parse_device_map()
+
+
+def parse_broker_auth_map():
+    mapping = {}
+
+    if not BROKER_AUTH_DEVICE_MAP:
+        return mapping
+
+    for item in BROKER_AUTH_DEVICE_MAP.split(","):
+        item = item.strip()
+
+        if not item:
+            continue
+
+        if "=" not in item:
+            raise RuntimeError(
+                "BROKER_AUTH_DEVICE_MAP inválido"
+            )
+
+        device_id, username = item.split(
+            "=",
+            1,
+        )
+
+        device_id = device_id.strip()
+        username = username.strip()
+
+        if not device_id or not username:
+            raise RuntimeError(
+                "BROKER_AUTH_DEVICE_MAP inválido"
+            )
+
+        mapping[device_id] = username
+
+    return mapping
+
+
+BROKER_AUTH_MAP = parse_broker_auth_map()
 
 
 
@@ -333,6 +389,92 @@ def prepare_pending_key(
     )
 
 
+def sync_broker_password(
+    device_id,
+    new_key,
+):
+    username = BROKER_AUTH_MAP.get(
+        device_id
+    )
+
+    # Solo actúa sobre dispositivos incluidos
+    # en el piloto del broker.
+    if not username:
+        return False
+
+    if BROKER_AUTH_PATH is None:
+        raise RuntimeError(
+            "BROKER_AUTH_FILE no está configurado"
+        )
+
+    if not BROKER_AUTH_PATH.exists():
+        raise RuntimeError(
+            "No existe el archivo MQTT: "
+            f"{BROKER_AUTH_PATH}"
+        )
+
+    temporary = BROKER_AUTH_PATH.with_name(
+        BROKER_AUTH_PATH.name
+        + f".tmp.{os.getpid()}"
+    )
+
+    shutil.copy2(
+        BROKER_AUTH_PATH,
+        temporary,
+    )
+
+    try:
+        completed = subprocess.run(
+            [
+                "mosquitto_passwd",
+                "-b",
+                str(temporary),
+                username,
+                new_key,
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=20,
+            check=False,
+        )
+
+        if completed.returncode != 0:
+            message = (
+                completed.stderr.strip()
+                or completed.stdout.strip()
+                or "mosquitto_passwd falló"
+            )
+
+            raise RuntimeError(
+                "No se pudo actualizar "
+                f"la credencial MQTT: {message}"
+            )
+
+        os.chmod(
+            temporary,
+            0o644,
+        )
+
+        os.replace(
+            temporary,
+            BROKER_AUTH_PATH,
+        )
+
+    finally:
+        if temporary.exists():
+            temporary.unlink()
+
+    print(
+        "[broker actualizado] "
+        f"device={device_id} | "
+        f"usuario={username}",
+        flush=True,
+    )
+
+    return True
+
+
 def finalize_key_file(device_id):
     pending = pending_key_path(
         device_id
@@ -432,6 +574,11 @@ def process_rotation(
                     actual_request_id,
                 "force": actual_force,
             },
+        )
+
+        sync_broker_password(
+            device_id,
+            new_key,
         )
 
         finalize_key_file(

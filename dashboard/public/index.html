@@ -62,6 +62,19 @@
             >
                 Dispositivos
             </button>
+
+            <button
+                id="tab-admin"
+                class="dashboard-tab"
+                type="button"
+                role="tab"
+                aria-selected="false"
+                aria-controls="view-admin"
+                data-view="admin"
+            >
+                Administración
+            </button>
+
         </nav>
 
         <!-- =================================================
@@ -337,6 +350,299 @@
                 no recibe API Keys, hashes ni contraseñas MQTT.
             </section>
         </section>
+
+        <!-- =================================================
+             PESTAÑA DE ADMINISTRACIÓN
+        ================================================== -->
+
+        <section
+            id="view-admin"
+            class="dashboard-view"
+            role="tabpanel"
+            aria-labelledby="tab-admin"
+            hidden
+        >
+            <div class="view-header">
+                <div>
+                    <p class="eyebrow">Acceso protegido</p>
+                    <h2>Administración de dispositivos</h2>
+
+                    <p class="view-description">
+                        Gestión de estados, credenciales y auditoría
+                        mediante autenticación administrativa con JWT.
+                    </p>
+                </div>
+            </div>
+
+            <!-- INICIO DE SESIÓN -->
+
+            <section
+                id="admin-login-panel"
+                class="admin-login-card"
+            >
+                <div class="admin-login-intro">
+                    <span class="admin-login-icon">🔐</span>
+
+                    <div>
+                        <h3>Inicio de sesión administrativo</h3>
+
+                        <p>
+                            Introduce las credenciales registradas en
+                            la tabla <code>admin_users</code>.
+                        </p>
+                    </div>
+                </div>
+
+                <form id="admin-login-form">
+                    <div class="admin-login-grid">
+                        <label>
+                            Usuario
+
+                            <input
+                                id="admin-username"
+                                name="username"
+                                type="text"
+                                autocomplete="username"
+                                minlength="3"
+                                maxlength="50"
+                                required
+                            >
+                        </label>
+
+                        <label>
+                            Contraseña
+
+                            <input
+                                id="admin-password"
+                                name="password"
+                                type="password"
+                                autocomplete="current-password"
+                                required
+                            >
+                        </label>
+                    </div>
+
+                    <button
+                        id="admin-login-button"
+                        type="submit"
+                    >
+                        Iniciar sesión
+                    </button>
+                </form>
+
+                <div
+                    id="admin-login-message"
+                    class="message admin-message"
+                    aria-live="polite"
+                    hidden
+                ></div>
+            </section>
+
+            <!-- PANEL AUTENTICADO -->
+
+            <section
+                id="admin-authenticated-panel"
+                hidden
+            >
+                <div class="admin-session-bar">
+                    <div>
+                        <span>Sesión iniciada como</span>
+
+                        <strong id="admin-session-user">
+                            —
+                        </strong>
+
+                        <span
+                            id="admin-session-role"
+                            class="admin-role-badge"
+                        >
+                            —
+                        </span>
+
+                        <small id="admin-session-expiration">
+                            —
+                        </small>
+                    </div>
+
+                    <div class="admin-session-actions">
+                        <button
+                            id="refresh-admin-button"
+                            type="button"
+                        >
+                            Actualizar panel
+                        </button>
+
+                        <button
+                            id="admin-logout-button"
+                            class="button-secondary"
+                            type="button"
+                        >
+                            Cerrar sesión
+                        </button>
+                    </div>
+                </div>
+
+                <section class="summary admin-summary">
+                    <article class="summary-card">
+                        <span>Total de dispositivos</span>
+                        <strong id="admin-device-total">0</strong>
+                    </article>
+
+                    <article class="summary-card">
+                        <span>Dispositivos activos</span>
+                        <strong id="admin-device-active">0</strong>
+                    </article>
+
+                    <article class="summary-card">
+                        <span>Dispositivos revocados</span>
+                        <strong id="admin-device-revoked">0</strong>
+                    </article>
+
+                    <article class="summary-card">
+                        <span>Eventos de auditoría</span>
+                        <strong id="admin-audit-count">0</strong>
+                    </article>
+                </section>
+
+                <div
+                    id="admin-panel-message"
+                    class="message"
+                    aria-live="polite"
+                >
+                    Sesión administrativa iniciada.
+                </div>
+
+                <!-- API KEY MOSTRADA UNA SOLA VEZ -->
+
+                <section
+                    id="credential-result"
+                    class="credential-result"
+                    hidden
+                >
+                    <div>
+                        <p class="eyebrow">
+                            Credencial generada
+                        </p>
+
+                        <h3>Nueva API Key</h3>
+
+                        <p id="credential-result-description">
+                            Guarda esta clave antes de ocultarla.
+                        </p>
+                    </div>
+
+                    <label for="credential-api-key">
+                        API Key mostrada una sola vez
+                    </label>
+
+                    <textarea
+                        id="credential-api-key"
+                        rows="2"
+                        readonly
+                    ></textarea>
+
+                    <div class="credential-actions">
+                        <button
+                            id="select-api-key-button"
+                            type="button"
+                        >
+                            Seleccionar clave
+                        </button>
+
+                        <button
+                            id="hide-api-key-button"
+                            class="button-secondary"
+                            type="button"
+                        >
+                            Ocultar clave
+                        </button>
+                    </div>
+
+                    <p class="credential-warning">
+                        El navegador no actualiza automáticamente
+                        <code>secrets/api_keys.txt</code>. La nueva
+                        clave debe guardarse manualmente.
+                    </p>
+                </section>
+
+                <!-- DISPOSITIVOS ADMINISTRATIVOS -->
+
+                <section class="table-section">
+                    <div class="section-heading">
+                        <div>
+                            <p class="eyebrow">
+                                Gestión de nodos
+                            </p>
+
+                            <h2>Dispositivos y credenciales</h2>
+                        </div>
+                    </div>
+
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Dispositivo</th>
+                                    <th>Área</th>
+                                    <th>Estado</th>
+                                    <th>Versión</th>
+                                    <th>Huella del hash</th>
+                                    <th>Última rotación</th>
+                                    <th>Última comunicación</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+
+                            <tbody
+                                id="admin-devices-table"
+                            ></tbody>
+                        </table>
+                    </div>
+
+                    <p
+                        id="admin-devices-empty"
+                        class="empty-state"
+                        hidden
+                    >
+                        No se encontraron dispositivos.
+                    </p>
+                </section>
+
+                <!-- AUDITORÍA -->
+
+                <section class="table-section">
+                    <div class="section-heading">
+                        <div>
+                            <p class="eyebrow">
+                                Trazabilidad
+                            </p>
+
+                            <h2>Auditoría reciente</h2>
+                        </div>
+                    </div>
+
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Fecha</th>
+                                    <th>Administrador</th>
+                                    <th>Acción</th>
+                                    <th>Dispositivo</th>
+                                    <th>Resultado</th>
+                                    <th>Detalles</th>
+                                </tr>
+                            </thead>
+
+                            <tbody
+                                id="admin-audit-table"
+                            ></tbody>
+                        </table>
+                    </div>
+                </section>
+            </section>
+        </section>
+
     </main>
 
     <footer>
@@ -346,5 +652,6 @@
     <script src="app.js?v=3"></script>
     <script src="charts.js?v=1"></script>
     <script src="devices.js?v=1"></script>
+    <script src="admin.js?v=1"></script>
 </body>
 </html>
